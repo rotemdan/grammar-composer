@@ -1,6 +1,6 @@
 import { Timer } from "./utilities/Timer.js"
 import { jsonSample2 } from "./test-data/TestData.js"
-import { anyOf, buildGrammar, parse } from "./GrammarComposer.js"
+import { anyOf, buildGrammar } from "./GrammarComposer.js"
 import { JsonGrammar } from "./test-grammars/JsonGrammar.js"
 import { XmlGrammar } from "./test-grammars/XmlGrammar.js"
 
@@ -19,7 +19,7 @@ function testBasic() {
 
 	const grammar = buildGrammar(MyGrammar, 'p1')
 
-	const result = parse('abcxyzu', grammar)
+	const result = grammar.parse('abcxyzu')
 
 	console.log(JSON.stringify(result, undefined, 4))
 }
@@ -32,7 +32,7 @@ function testJsonParser() {
 
 	function run() {
 		const timer = new Timer()
-		const result1 = parse(jsonString, grammar)
+		const result1 = grammar.parse(jsonString)
 		timer.logAndRestart('Parse')
 
 		const result2 = JSON.parse(jsonString)
@@ -72,7 +72,7 @@ function testXmlParser() {
 	const grammar = buildGrammar(XmlGrammar, 'document')
 
 	// Parse the XML string
-	const parseTree = parse(xmlString, grammar)
+	const parseTree = grammar.parse(xmlString)
 
 	log(JSON.stringify(parseTree, undefined, 4))
 }
@@ -83,7 +83,7 @@ async function testParserError1() {
 
 	const grammar = buildGrammar(XmlGrammar, 'document')
 
-	const result = parse(xmlData, grammar)
+	const result = grammar.parse(xmlData)
 
 	console.log(JSON.stringify(result, undefined, 4))
 }
@@ -93,7 +93,7 @@ async function testParserError2() {
 
 	const grammar = buildGrammar(JsonGrammar, 'expression')
 
-	const result = parse(jsonData, grammar)
+	const result = grammar.parse(jsonData)
 
 	console.log(JSON.stringify(result, undefined, 4))
 }

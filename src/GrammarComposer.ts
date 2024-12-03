@@ -1,7 +1,7 @@
 import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
 import { isArray, isBoolean, isFunction, isString } from "./utilities/Utilities.js"
 
-export * from './TopDownParser.js'
+import { parse } from './TopDownParser.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Grammar builder method
@@ -61,11 +61,11 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		nonterminals[nameLookup.get(key)!] = nonterminal
 	}
 
-	return {
-		rootElement: nonterminals[startProductionName],
-		productions: nonterminals,
-		maxElementId: uniqueIdCounter
-	} as Grammar<T>
+	return new Grammar(
+		nonterminals[startProductionName],
+		nonterminals,
+		uniqueIdCounter
+	 ) as Grammar<T>
 }
 
 function prepareGrammarElement(
@@ -475,10 +475,20 @@ function productionToGrammarElement(production: Production): GrammarElement {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Type definitions
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export interface Grammar<T> {
-	rootElement: Nonterminal
-	productions: { [key in keyof T]: any }
-	maxElementId: number
+export class Grammar<T> {
+	readonly rootElement: Nonterminal
+	readonly productions: Record<keyof T, any>
+	readonly maxElementId: number
+
+	constructor(rootElement: Nonterminal, productions: Record<keyof T, any>, maxElementId: number) {
+		this.rootElement = rootElement
+		this.productions = productions
+		this.maxElementId = maxElementId
+	}
+
+	parse(text: string) {
+		return parse(text, this)
+	}
 }
 
 export type Production = string | GrammarElement | (() => Production) | Production[]
