@@ -3,7 +3,7 @@
 A library to define, build and efficiently parse context-free grammars.
 
 * Grammars are defined using TypeScript class declarations
-* No need for separate tokenization step. Tokenization is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the `regexp-composer` regular expression library
+* No need for separate tokenization step. Tokenization is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library
 * The generated parser accepts raw characters as input, meaning it's a form of lexer-free, or hybrid parser, supporting contextual tokenization - that is, low-level character patterns can be specialized to different high-level parser contexts, and sub-patterns captured in the low-level regular expressions are directly embedded as part of the resulting parse tree
 * Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions
 * Supports right-recursion, but will currently error when left-recursion is detected
@@ -201,7 +201,7 @@ const parseTree = parse(xmlString, grammar)
 
 The resulting parse tree looks like:
 
-```json
+```ts
 [
     {
         "name": "document",
@@ -344,8 +344,7 @@ m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Co
 
 ## Operators
 
-Context-free operators are mostly named similarly to the ones in `regexp-composer`.
-
+Context-free operators are mostly named similarly to the ones in [`regexp-composer`](https://github.com/rotemdan/regexp-composer).
 
 ### `zeroOrMore(grammarElement)`
 
