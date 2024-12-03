@@ -17,7 +17,7 @@ A library to define, build and efficiently parse context-free grammars.
 npm install grammar-composer
 ```
 
-And also the related regular expression generator:
+And also the related regular expression generator package:
 ```
 npm install regexp-composer
 ```
@@ -177,7 +177,7 @@ const quotedString = R.anyOf(
 Building and parsing using the XML grammar:
 
 ```ts
-import { buildGrammar, parse } from 'grammar-composer'
+import { buildGrammar } from 'grammar-composer'
 
 	const xmlString = `
 <!DOCTYPE web-app>
@@ -207,7 +207,7 @@ import { buildGrammar, parse } from 'grammar-composer'
 const grammar = buildGrammar(XmlGrammar, 'document')
 
 // Parse the XML string with the built grammar
-const parseTree = parse(xmlString, grammar)
+const parseTree = grammar.parse(xmlString, grammar)
 ```
 
 The resulting parse tree looks like:
