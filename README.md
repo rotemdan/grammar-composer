@@ -11,6 +11,17 @@ A library to define, build and efficiently parse context-free grammars.
 * Provides useful parse-time error reporting, identifying the exact production involved and most likely alternatives at the failed position
 * Fast parsing. Optimized for speed
 
+## Installation
+
+```
+npm install grammar-composer
+```
+
+And also the related regular expression generator:
+```
+npm install regexp-composer
+```
+
 ## Example: XML grammar
 
 The grammar is defined within a container class `XmlGrammar`. It contains a mixture of higher-level, context-free productions and lower-level, regular expression productions.
