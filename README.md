@@ -202,12 +202,12 @@ import { buildGrammar } from 'grammar-composer'
 
 // Build the grammar. 'document' is the starting production.
 //
-// Although `XmlGrammar` is a class, there's no need to instantiatte it,
+// Although `XmlGrammar` is defined as a class, there's no need to instantiatte it,
 // just pass it as it is.
 const grammar = buildGrammar(XmlGrammar, 'document')
 
 // Parse the XML string with the built grammar
-const parseTree = grammar.parse(xmlString, grammar)
+const parseTree = grammar.parse(xmlString)
 ```
 
 The resulting parse tree looks like:
