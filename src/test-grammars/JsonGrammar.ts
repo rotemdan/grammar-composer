@@ -11,58 +11,18 @@ export class JsonGrammar {
 		this.arrayExpression
 	)
 
-	objectExpression = () => [
-		this.openingCurlyBrace,
-
-		G.possibly([
-			this.objectPropertyExpression,
-			G.zeroOrMore([this.comma, this.objectPropertyExpression])
-		]),
-
-		this.closingCurlyBrace,
-	]
-
-	objectPropertyExpression = () => [
-		this.stringLiteral,
-		this.colons,
-		this.expression,
-	]
-
-	arrayExpression = () => [
-		this.openingSquareBracket,
-
-		G.possibly([
-			this.expression,
-			G.zeroOrMore([this.comma, this.expression])
-		]),
-
-		this.closingSquareBracket
-	]
-
-	openingCurlyBrace = createPatternWithClearedWhitespace('{')
-	closingCurlyBrace = createPatternWithClearedWhitespace('}')
-
-	openingSquareBracket = createPatternWithClearedWhitespace('[')
-	closingSquareBracket = createPatternWithClearedWhitespace(']')
-
-	comma = createPatternWithClearedWhitespace(',')
-	colons = createPatternWithClearedWhitespace(':')
-
 	stringLiteral = G.pattern([
 		zeroOrMoreWhitespace,
 
 		'"',
 
-		R.matches(
-			R.captureAs('value',
-				R.zeroOrMoreNonGreedy(R.anyChar)
-			),
-			{
-				ifNotPrecededBy: '\\'
-			}
+		R.captureAs('value',
+			R.zeroOrMoreNonGreedy(R.anyChar)
 		),
 
-		'"',
+		R.matches('"', {
+			ifNotPrecededBy: '\\'
+		}),
 
 		zeroOrMoreWhitespace,
 	])
@@ -103,13 +63,50 @@ export class JsonGrammar {
 
 		zeroOrMoreWhitespace,
 	])
+
+	objectExpression = () => [
+		this.openingCurlyBrace,
+
+		G.possibly([
+			this.objectPropertyExpression,
+			G.zeroOrMore([this.comma, this.objectPropertyExpression])
+		]),
+
+		this.closingCurlyBrace,
+	]
+
+	objectPropertyExpression = () => [
+		this.stringLiteral,
+		this.colons,
+		this.expression,
+	]
+
+	arrayExpression = () => [
+		this.openingSquareBracket,
+
+		G.possibly([
+			this.expression,
+			G.zeroOrMore([this.comma, this.expression])
+		]),
+
+		this.closingSquareBracket
+	]
+
+	openingCurlyBrace = createPatternWithClearedWhitespace('{')
+	closingCurlyBrace = createPatternWithClearedWhitespace('}')
+
+	openingSquareBracket = createPatternWithClearedWhitespace('[')
+	closingSquareBracket = createPatternWithClearedWhitespace(']')
+
+	comma = createPatternWithClearedWhitespace(',')
+	colons = createPatternWithClearedWhitespace(':')
 }
 
-function createPatternWithClearedWhitespace(str: string) {
+function createPatternWithClearedWhitespace(subpattern: R.Pattern) {
 	return G.pattern([
 		zeroOrMoreWhitespace,
 
-		str,
+		subpattern,
 
 		zeroOrMoreWhitespace
 	])

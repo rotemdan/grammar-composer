@@ -1,5 +1,5 @@
 import { Timer } from "./utilities/Timer.js"
-import { jsonSample2 } from "./test-data/TestData.js"
+import { jsonSample1, jsonSample2 } from "./test-data/TestData.js"
 import { anyOf, buildGrammar } from "./GrammarComposer.js"
 import { JsonGrammar } from "./test-grammars/JsonGrammar.js"
 import { XmlGrammar } from "./test-grammars/XmlGrammar.js"
@@ -24,26 +24,29 @@ function testBasic() {
 	console.log(JSON.stringify(result, undefined, 4))
 }
 
-
 function testJsonParser() {
-	const jsonString = jsonSample2
+	const jsonString = jsonSample1
 
 	const grammar = buildGrammar(JsonGrammar, 'expression')
 
-	function run() {
-		const timer = new Timer()
-		const result1 = grammar.parse(jsonString)
-		timer.logAndRestart('Parse')
+	const iterations = 1000
 
-		const result2 = JSON.parse(jsonString)
-		timer.logAndRestart('JSON.Parse')
+	let result1: any
+	let result2: any
 
-		log(JSON.stringify(result2, undefined, 4))
+	const timer = new Timer()
+
+	for (let i = 0; i < iterations; i++) {
+		result1 = grammar.parse(jsonString)
 	}
+	timer.logAndRestart('grammar.Parse')
 
-	for (let i = 0; i < 1; i++) {
-		run()
+	for (let i = 0; i < iterations; i++) {
+		result2 = JSON.parse(jsonString)
 	}
+	timer.logAndRestart('JSON.Parse')
+
+	log(JSON.stringify(result1, undefined, 4))
 }
 
 function testXmlParser() {
@@ -98,4 +101,4 @@ async function testParserError2() {
 	console.log(JSON.stringify(result, undefined, 4))
 }
 
-testXmlParser()
+testJsonParser()

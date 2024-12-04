@@ -1,7 +1,7 @@
 export const jsonSample1 = JSON.stringify([
 	{
 		"yo": 23,
-		"man": "hey"
+		"man": "h\"ey"
 	}
 ], undefined, 4)
 
