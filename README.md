@@ -202,7 +202,7 @@ import { buildGrammar } from 'grammar-composer'
 
 // Build the grammar. 'document' is the starting production.
 //
-// Although `XmlGrammar` is defined as a class, there's no need to instantiatte it,
+// Although `XmlGrammar` is defined as a class, there's no need to instantiate it,
 // just pass it as it is.
 const grammar = buildGrammar(XmlGrammar, 'document')
 
@@ -391,7 +391,8 @@ Don't cache this grammar element.
 
 ## Future
 
-* Provide custom parser functions
+* Allow raw regular expressions as part of the grammar
+* Allow to include user-provided parser functions
 
 ## License
 
