@@ -3,6 +3,7 @@ import { jsonSample1, jsonSample2 } from "./test-data/TestData.js"
 import { anyOf, buildGrammar } from "./GrammarComposer.js"
 import { JsonGrammar } from "./test-grammars/JsonGrammar.js"
 import { XmlGrammar } from "./test-grammars/XmlGrammar.js"
+import { RegExpGrammar } from "./test-grammars/RegExpGrammar.js"
 
 const log = console.log
 
@@ -80,6 +81,23 @@ function testXmlParser() {
 	log(JSON.stringify(parseTree, undefined, 4))
 }
 
+async function testRegExpParser() {
+	//const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
+	const regExpString = /^asdf{$/.source
+
+	const grammar = buildGrammar(RegExpGrammar, 'disjunction')
+
+	const parseTree = grammar.parse(regExpString)
+
+	const parseTreeJson = JSON.stringify(parseTree, undefined, 4)
+
+	log(parseTreeJson)
+
+	const { writeFile } = await import('fs/promises')
+
+	await writeFile('out/out.json', parseTreeJson)
+}
+
 
 async function testParserError1() {
 	const xmlData = `<hello> wo rld <!!! `
@@ -101,4 +119,6 @@ async function testParserError2() {
 	console.log(JSON.stringify(result, undefined, 4))
 }
 
-testJsonParser()
+//testJsonParser()
+
+testRegExpParser()
