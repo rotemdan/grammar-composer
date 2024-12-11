@@ -9,7 +9,6 @@ A library to define, build and efficiently parse context-free grammars.
 * Supports right-recursion, but will currently error when left-recursion is detected
 * Uses sophisticated static analysis to automatically identify and annotate optional productions
 * Provides useful parse-time error reporting, identifying the exact production involved and most likely alternatives at the failed position
-* Fast parsing. Optimized for speed
 
 ## Installation
 
@@ -17,7 +16,7 @@ A library to define, build and efficiently parse context-free grammars.
 npm install grammar-composer
 ```
 
-And also the related regular expression generator package:
+And also the related regular expression builder package:
 ```
 npm install regexp-composer
 ```
