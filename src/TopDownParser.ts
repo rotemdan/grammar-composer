@@ -2,7 +2,6 @@ import { Grammar, GrammarElement, Terminal } from "./GrammarComposer.js"
 
 export function parse(inputString: string, grammar: Grammar<any>) {
 	const inputLength = inputString.length
-	const maxElementId = grammar.maxElementId
 
 	let bestFailedMatches: Terminal[] = []
 	let bestFailedMatchesOffset = -1
@@ -134,13 +133,7 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 						})
 					}
 
-					nodes = [{
-						name: grammarElement.name,
-						startOffset: matchStartOffset,
-						endOffset: matchEndOffset,
-						sourceText: inputString.substring(matchStartOffset, matchEndOffset),
-						children
-					}]
+					nodes = children
 				}
 
 				const parseResult: ParseResult = {
@@ -268,8 +261,10 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 			const possibleMatches = bestFailedMatches.map(match => {
 				if (match.type === 'StringTerminal') {
 					return `'${match.content}'`
+				} else if (match.type === 'PatternTerminal') {
+					return `/${match.regExp.source}/`
 				} else {
-					return match.name
+					throw new Error(`Invalid match type: '${(match as any).type}'`)
 				}
 			})
 

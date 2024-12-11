@@ -38,7 +38,11 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 	const uniqueIdSource = () => uniqueIdCounter++
 
 	for (const [func, nonterminal] of nonterminalLookup) {
-		const preparedContent = prepareGrammarElement(nonterminal.content, nameLookup as Map<any, string>, nonterminalLookup, optionalNonterminalLookup, uniqueIdSource)
+		const preparedContent = prepareGrammarElement(
+			nonterminal.content,
+			nonterminalLookup,
+			optionalNonterminalLookup,
+			uniqueIdSource)
 
 		nonterminal.content = preparedContent
 
@@ -46,7 +50,7 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		optionalNonterminal.content = preparedContent
 	}
 
-	let startNonterminal = nonterminalLookup.get(obj[startProductionName] as Function)
+	const startNonterminal = nonterminalLookup.get(obj[startProductionName] as Function)
 
 	if (!startNonterminal) {
 		throw new Error(`Couldn't find a start production named '${startProductionName as string}'.`)
@@ -61,16 +65,15 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		nonterminals[nameLookup.get(key)!] = nonterminal
 	}
 
-	return new Grammar(
+	return new Grammar<T>(
 		nonterminals[startProductionName],
 		nonterminals,
 		uniqueIdCounter
-	 ) as Grammar<T>
+	 )
 }
 
 function prepareGrammarElement(
 	rootElement: GrammarElement,
-	nameLookup: Map<any, string>,
 	nonterminalLookup: Map<Function, Nonterminal>,
 	optionalNonterminalLookup: Map<Function, Nonterminal>,
 	getUniqueId: () => number
@@ -89,7 +92,6 @@ function prepareGrammarElement(
 			case 'PatternTerminal': {
 				return {
 					...element,
-					name: nameLookup.get(element) ?? '',
 					uniqueId: getUniqueId()
 				}
 			}
@@ -399,7 +401,6 @@ export function pattern(pattern: Pattern): PatternTerminal {
 
 	return {
 		type: 'PatternTerminal',
-		name: '[Pattern]',
 		pattern,
 		regExp,
 		optional,
@@ -518,8 +519,7 @@ export interface StringTerminal extends GrammarElementBase {
 
 export interface PatternTerminal extends GrammarElementBase {
 	type: 'PatternTerminal'
-	name: string
-	pattern: Pattern | Pattern[]
+	pattern: Pattern
 	regExp: RegExp
 }
 
