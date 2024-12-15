@@ -82,8 +82,8 @@ function testXmlParser() {
 }
 
 async function testRegExpParser() {
-	//const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
-	const regExpString = /^asdf{$/.source
+	const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
+	//const regExpString = /^asdf{$/.source
 
 	const grammar = buildGrammar(RegExpGrammar, 'disjunction')
 
