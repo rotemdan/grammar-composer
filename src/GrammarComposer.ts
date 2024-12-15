@@ -66,8 +66,8 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 	}
 
 	return new Grammar<T>(
-		nonterminals[startProductionName],
 		nonterminals,
+		startProductionName,
 		uniqueIdCounter
 	 )
 }
@@ -477,18 +477,22 @@ function productionToGrammarElement(production: Production): GrammarElement {
 // Type definitions
 /////////////////////////////////////////////////////////////////////////////////////////////////
 export class Grammar<T> {
-	readonly rootElement: Nonterminal
 	readonly productions: Record<keyof T, any>
+	readonly startProductionName: keyof T
 	readonly maxElementId: number
 
-	constructor(rootElement: Nonterminal, productions: Record<keyof T, any>, maxElementId: number) {
-		this.rootElement = rootElement
+	constructor(productions: Record<keyof T, any>, startProductionName: keyof T, maxElementId: number) {
+		this.startProductionName = startProductionName
 		this.productions = productions
 		this.maxElementId = maxElementId
 	}
 
 	parse(text: string) {
 		return parse(text, this)
+	}
+
+	get rootElement() {
+		return (this.productions as any)[this.startProductionName]
 	}
 }
 
