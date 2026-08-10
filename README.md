@@ -4,7 +4,7 @@ A library to define, build and efficiently parse context-free grammars.
 
 * Grammars are defined using TypeScript class declarations
 * No tokenization stage. The generated parser accepts raw characters as input, meaning it's a form of lexer-free, or hybrid parser, supporting contextual tokenization - that is, low-level character patterns can be specialized to different high-level parser contexts, and sub-patterns captured in the low-level regular expressions are directly embedded as part of the resulting parse tree
-* Raw character parsing is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library
+* Raw character parsing is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library. This means that any subset of the grammar that can be stated as a regular expression can be moved to be parsed using the highly optimized native JavaScript RegExp engine, instead of being parsed via the slower context-free parser
 * Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions
 * Supports right-recursion, but will currently error when left-recursion is detected
 * Uses sophisticated static analysis to automatically identify and annotate optional productions
@@ -29,6 +29,7 @@ The grammar is defined within a container class `XmlGrammar`. It contains a mixt
 * Regular expression productions are defined by `pattern(...)`
 
 In this example, context-free operators are prefixed with `G`, and regular expression operators are prefixed with `R`, to avoid confusion between similarly named operators:
+
 ```ts
 import * as G from 'grammar-composer'
 import * as R from 'regexp-composer'
@@ -173,7 +174,7 @@ const quotedString = R.anyOf(
 )
 ```
 
-Building and parsing using the XML grammar:
+### Building and parsing using the XML grammar
 
 ```ts
 import { buildGrammar } from 'grammar-composer'

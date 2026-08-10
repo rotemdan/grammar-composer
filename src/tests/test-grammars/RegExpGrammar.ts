@@ -3,7 +3,7 @@ import * as R from 'regexp-composer'
 
 export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
-	// High level productions
+	// High-level productions
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	disjunction = () => [
 		this.sequence,
@@ -14,7 +14,7 @@ export class RegExpGrammar {
 		])
 	]
 
-	sequence = () => G.oneOrMore(this.element)
+	sequence = () => G.zeroOrMore(this.element)
 
 	element = () => G.anyOf(
 		this.anchor,
@@ -66,14 +66,14 @@ export class RegExpGrammar {
 	)
 
 	uncapturedGroup = () => [
-		'(:',
+		'(?:',
 		this.disjunction,
 		')',
 	]
 
 	namedCaptureGroup = () => [
 		'(?<',
-		G.pattern(R.captureAs('name', R.oneOrMore(letter))),
+		G.pattern(R.captureAs('name', R.oneOrMore(identifierChar))),
 		'>',
 		this.disjunction,
 		')',
@@ -97,7 +97,7 @@ export class RegExpGrammar {
 	namedBackreference = () =>
 		G.pattern([
 			'\\k<',
-			R.captureAs('name', digit),
+			R.captureAs('name', R.oneOrMore(identifierChar)),
 			'>',
 		])
 
@@ -148,6 +148,7 @@ export class RegExpGrammar {
 		this.charClass,
 		this.unicodeProperty,
 		this.notUnicodeProperty,
+		this.escapedCharacterClass,
 		this.charcodeOrEscapedChar,
 		this.unreservedCharLiteral
 	)
@@ -170,15 +171,26 @@ export class RegExpGrammar {
 
 	controlCharcode = () => G.pattern([
 		'\\c',
-		R.charRange('A', 'Z'),
+		R.anyOf(R.charRange('A', 'Z'), R.charRange('a', 'z')),
 	])
 
-	codepoint = () => G.pattern([
-		'\\u',
-		'{',
-		R.captureAs('value', R.oneOrMore(hexDigit)),
-		'}',
-	])
+	nullCharcode = () => G.pattern('\\0')
+
+	codepoint = () => G.anyOf(
+		G.pattern([
+			'\\u',
+			'{',
+			R.captureAs('value', R.repeated([1, 6], hexDigit)),
+			'}',
+		]),
+		G.pattern([
+			'\\u',
+			hexDigit,
+			hexDigit,
+			hexDigit,
+			hexDigit
+		])
+	)
 
 	codepointRange = () => G.pattern([
 		'\\u',
@@ -201,10 +213,10 @@ export class RegExpGrammar {
 
 	unicodePropertyBodyPattern: R.Pattern = [
 		'{',
-		R.captureAs('property', R.oneOrMore(letterOrDigit)),
+		R.captureAs('property', R.oneOrMore(R.anyOf(letter, digit, '_', '-'))),
 		R.possibly([
 			'=',
-			R.captureAs('value', R.oneOrMore(letterOrDigit)),
+			R.captureAs('value', R.oneOrMore(R.anyOf(letter, digit, '_', '-'))),
 		]),
 		'}',
 	]
@@ -217,9 +229,9 @@ export class RegExpGrammar {
 		G.oneOrMore(G.anyOf(
 			this.charRange,
 			this.codepointRange,
-			this.charClass,
 			this.unicodeProperty,
 			this.notUnicodeProperty,
+			this.escapedCharacterClass,
 			this.charcodeOrEscapedChar,
 			this.charClassChar
 		)),
@@ -235,7 +247,7 @@ export class RegExpGrammar {
 
 	charRangeElement = G.anyOf(
 		this.charcodeOrEscapedChar,
-		G.pattern(R.anyChar),
+		G.pattern(R.notAnyOfChars(']')),
 	)
 
 	charRange = () => [
@@ -267,6 +279,8 @@ export class RegExpGrammar {
 		R.captureAs('nonWhitespace', escapedCharString.nonWhitespace),
 		R.captureAs('digit', escapedCharString.digit),
 		R.captureAs('nonDigit', escapedCharString.nonDigit),
+		R.captureAs('word', escapedCharString.word),
+		R.captureAs('nonWord', escapedCharString.nonWord),
 		R.captureAs('wordBoundary', escapedCharString.wordBoundary),
 		R.captureAs('nonWordBoundary', escapedCharString.nonWordBoundary),
 		R.captureAs('formFeed', escapedCharString.formFeed),
@@ -280,16 +294,16 @@ export class RegExpGrammar {
 
 const digit = R.charRange('0', '9')
 const letter = R.anyOf(R.charRange('a', 'z'), R.charRange('A', 'Z'))
-const letterOrDigit = R.anyOf(letter, digit)
 const hexDigit = R.anyOf(digit, R.charRange('a', 'f'), R.charRange('A', 'F'))
+const identifierChar = R.anyOf(letter, digit, '_', '$')
 
 const escapedCharString = {
 	whitespace: '\\s',
 	nonWhitespace: '\\S',
 	digit: '\\d',
 	nonDigit: '\\D',
-	word: '\\d',
-	nonWord: '\\D',
+	word: '\\w',
+	nonWord: '\\W',
 	wordBoundary: '\\b',
 	nonWordBoundary: '\\B',
 	formFeed: '\\f',
