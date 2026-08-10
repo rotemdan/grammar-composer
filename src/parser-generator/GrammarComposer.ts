@@ -1,5 +1,5 @@
 import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
-import { isArray, isBoolean, isFunction, isString } from "./utilities/Utilities.js"
+import { isArray, isBoolean, isFunction, isString } from "../utilities/Utilities.js"
 
 import { parse } from './TopDownParser.js'
 

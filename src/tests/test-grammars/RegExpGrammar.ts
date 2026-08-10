@@ -1,4 +1,4 @@
-import * as G from '../GrammarComposer.js'
+import * as G from '../../exports/Exports.js'
 import * as R from 'regexp-composer'
 
 export class RegExpGrammar {
