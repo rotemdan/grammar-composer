@@ -1,6 +1,6 @@
 {
 	"name": "grammar-composer",
-	"version": "0.2.4",
+	"version": "0.3.0",
 	"description": "Defines and generates parsers from composable grammar definitions. Includes advanced features like lexer-free parsing, selective packrat memoization and static analysis.",
 	"author": "Rotem Dan",
 	"license": "MIT",
@@ -19,7 +19,7 @@
 	"bugs": {
 		"url": "https://github.com/rotemdan/grammar-composer/issues"
 	},
-	"main": "./dist/GrammarComposer.js",
+	"main": "./dist/exports/Exports.js",
 	"type": "module",
 	"files": [
 		"dist",
@@ -29,12 +29,12 @@
 		"README.md"
 	],
 	"scripts": {
-		"test": "node dist/Test.js"
+		"test": "node dist/tests/Test.js"
 	},
 	"dependencies": {
-		"regexp-composer": "~0.3.0"
+		"regexp-composer": "~0.4.0"
 	},
 	"devDependencies": {
-		"@types/node": "~22.15.18"
+		"@types/node": "~26.2.0"
 	}
 }
