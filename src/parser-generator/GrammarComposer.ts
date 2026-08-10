@@ -24,7 +24,7 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 			continue
 		}
 
-		const productionContent = objectProperty()
+		const productionContent = objectProperty.call(obj)
 		const normalizedProduction = productionToGrammarElement(productionContent)
 
 		const newNonterminal = nonterminal(key, normalizedProduction)
@@ -69,7 +69,7 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		nonterminals,
 		startProductionName,
 		uniqueIdCounter
-	 )
+	)
 }
 
 function prepareGrammarElement(
@@ -128,6 +128,18 @@ function prepareGrammarElement(
 					throw new Error(`Couldn't resolve function reference in grammar element: ${JSON.stringify(element)}`)
 				}
 
+				if (element.cached !== undefined || element.uniqueId !== undefined) {
+					const clonedNonterminal = { ...nonterminal }
+
+					if (element.cached !== undefined) {
+						clonedNonterminal.cached = element.cached
+					}
+
+					clonedNonterminal.uniqueId = getUniqueId()
+
+					return clonedNonterminal
+				}
+
 				if (nonterminal.uniqueId === undefined) {
 					nonterminal.uniqueId = getUniqueId()
 				}
@@ -147,7 +159,7 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 	const visitedNodes = new Set<GrammarElement>()
 
 	const resolvedNodes = new Map<GrammarElement, boolean>()
-	const unresolvedNodes = new Map<GrammarElement, Set<GrammarElement>>()
+	const unresolvedNodes = new Map<GrammarElement, { dependencies: Set<GrammarElement>, isChoice: boolean }>()
 
 	function processDepthFirst(node: GrammarElement): boolean | undefined {
 		if (visitedNodes.has(node)) {
@@ -177,24 +189,23 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 
 					return result
 				} else {
-					unresolvedNodes.set(node, new Set([node.content]))
+					unresolvedNodes.set(node, { dependencies: new Set([node.content]), isChoice: false })
 
 					return undefined
 				}
 			}
 
-			case 'Sequence':
-			case 'Choice': {
+			case 'Sequence': {
 				const dependencies = new Set<GrammarElement>()
 
-				let allResolvedElementsAreOptional = true
+				let hasNonOptionalResolvedMember = false
 
 				for (const element of node.members) {
 					const result = processDepthFirst(element)
 
 					if (isBoolean(result)) {
-						if (result == false) {
-							allResolvedElementsAreOptional = false
+						if (result === false) {
+							hasNonOptionalResolvedMember = true
 						}
 					} else {
 						dependencies.add(element)
@@ -205,12 +216,51 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 					resolvedNodes.set(node, true)
 
 					return true
-				} else if (dependencies.size == 0 || !allResolvedElementsAreOptional) {
-					resolvedNodes.set(node, allResolvedElementsAreOptional)
+				} else if (hasNonOptionalResolvedMember) {
+					resolvedNodes.set(node, false)
 
-					return allResolvedElementsAreOptional
+					return false
+				} else if (dependencies.size == 0) {
+					resolvedNodes.set(node, true)
+
+					return true
 				} else {
-					unresolvedNodes.set(node, dependencies)
+					unresolvedNodes.set(node, { dependencies, isChoice: false })
+
+					return undefined
+				}
+			}
+
+			case 'Choice': {
+				const dependencies = new Set<GrammarElement>()
+				let hasOptionalResolvedMember = false
+
+				for (const element of node.members) {
+					const result = processDepthFirst(element)
+
+					if (isBoolean(result)) {
+						if (result === true) {
+							hasOptionalResolvedMember = true
+						}
+					} else {
+						dependencies.add(element)
+					}
+				}
+
+				if (node.optional == true) {
+					resolvedNodes.set(node, true)
+
+					return true
+				} else if (hasOptionalResolvedMember) {
+					resolvedNodes.set(node, true)
+
+					return true
+				} else if (dependencies.size == 0) {
+					resolvedNodes.set(node, false)
+
+					return false
+				} else {
+					unresolvedNodes.set(node, { dependencies, isChoice: true })
 
 					return undefined
 				}
@@ -231,13 +281,14 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 		// If it stays false, it means that no improvement was made during the iteration,
 		// and we should exit the loop.
 		let atLastOneDependencyResolvedInAnyNode = false
+		const nodesToDelete: GrammarElement[] = []
 
 		// Scan the unresolved nodes to locate any new resolved dependencies
-		for (const [node, dependencies] of unresolvedNodes) {
-			let nonOptionalDependencyFound = false
+		for (const [node, { dependencies, isChoice }] of unresolvedNodes) {
+			let nodeResolved = false
 
 			// Iterate over all unresolved dependencies for the node
-			for (const dependency of dependencies) {
+			for (const dependency of Array.from(dependencies)) {
 				// Check if the dependency has been resolved
 				const value = resolvedNodes.get(dependency)
 
@@ -245,26 +296,39 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 					// If it did, record that some dependencies were resolved
 					atLastOneDependencyResolvedInAnyNode = true
 
-					if (value === false) {
-						// If the value was false, then the entire target node must not be optional
-						nonOptionalDependencyFound = true
-
-						break
+					if (isChoice) {
+						if (value === true) {
+							resolvedNodes.set(node, true)
+							nodeResolved = true
+							break
+						}
 					} else {
-						// If the result was true, remove the dependency from the set
-						dependencies.delete(dependency)
+						if (value === false) {
+							resolvedNodes.set(node, false)
+							nodeResolved = true
+							break
+						}
 					}
+
+					dependencies.delete(dependency)
 				}
 			}
 
-			// If either a non-optional dependency was found, or all dependencies were resolved,
-			// resolve the target node:
-			if (nonOptionalDependencyFound || dependencies.size === 0) {
-				const isOptional = !nonOptionalDependencyFound
-
-				resolvedNodes.set(node, isOptional)
-				unresolvedNodes.delete(node)
+			if (nodeResolved) {
+				nodesToDelete.push(node)
+			} else if (dependencies.size === 0) {
+				if (isChoice) {
+					resolvedNodes.set(node, false)
+				} else {
+					resolvedNodes.set(node, true)
+				}
+				
+				nodesToDelete.push(node)
 			}
+		}
+
+		for (const node of nodesToDelete) {
+			unresolvedNodes.delete(node)
 		}
 
 		// If not even one dependency was eliminated for any node,

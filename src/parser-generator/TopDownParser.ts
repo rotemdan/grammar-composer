@@ -78,12 +78,6 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 			}
 
 			case 'PatternTerminal': {
-				if (startOffset >= inputLength) {
-					updateBestFailedMatchesIfNeeded(grammarElement, startOffset)
-
-					return null
-				}
-
 				const substringToMatch = inputString.substring(startOffset)
 
 				const matchResults = grammarElement.regExp.exec(substringToMatch)
@@ -209,6 +203,10 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 						break
 					}
 
+					if (result.endOffset === readOffset) {
+						break
+					}
+
 					if (result.nodes !== undefined) {
 						nodes.push(...result.nodes)
 					}
@@ -220,6 +218,11 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 					return {
 						endOffset: readOffset,
 						nodes: nodes.length > 0 ? nodes : undefined
+					}
+				} else if (grammarElement.optional === true) {
+					return {
+						endOffset: startOffset,
+						nodes: undefined
 					}
 				} else {
 					return null
@@ -252,10 +255,8 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 
 	const result = tryParse(grammar.rootElement, 0)
 
-	const lastNode = result?.nodes?.[result.nodes.length - 1]
-
-	if (lastNode && lastNode.endOffset >= inputLength) {
-		return result.nodes
+	if (result && result.endOffset >= inputLength) {
+		return result.nodes ?? []
 	} else {
 		if (bestFailedMatches.length > 0) {
 			const possibleMatches = bestFailedMatches.map(match => {
@@ -280,7 +281,9 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 
 			throw new Error(`Failed parsing the input text. Expected ${possibleMatchesString} at position ${bestFailedMatchesOffset}.`)
 		} else {
-			throw new Error(`Failed parsing the input text. Parsed length was ${lastNode?.endOffset ?? 0}. Input length was ${inputLength}.`)
+			const lastNode = result?.nodes?.[result.nodes.length - 1]
+
+			throw new Error(`Failed parsing the input text. Parsed length was ${lastNode?.endOffset ?? result?.endOffset ?? 0}. Input length was ${inputLength}.`)
 		}
 	}
 }
