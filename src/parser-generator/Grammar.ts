@@ -1,5 +1,5 @@
 import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
-import { isArray, isBoolean, isFunction, isString } from "../utilities/Utilities.js"
+import { isArray, isBoolean, isFunction, isString } from '../utilities/Utilities.js'
 
 import { parse } from './TopDownParser.js'
 
@@ -322,7 +322,7 @@ function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 				} else {
 					resolvedNodes.set(node, true)
 				}
-				
+
 				nodesToDelete.push(node)
 			}
 		}

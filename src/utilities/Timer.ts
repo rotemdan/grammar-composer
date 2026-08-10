@@ -1,4 +1,4 @@
-import { roundToDigits } from "./Utilities.js"
+import { roundToDigits } from './Utilities.js'
 
 declare const chrome: any
 declare const process: any

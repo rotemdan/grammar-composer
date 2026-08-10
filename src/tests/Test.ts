@@ -1,9 +1,9 @@
-import { Timer } from "../utilities/Timer.js"
-import { jsonSample1, jsonSample2 } from "./test-data/TestData.js"
-import { anyOf, buildGrammar } from "../exports/Exports.js"
-import { JsonGrammar } from "./test-grammars/JsonGrammar.js"
-import { XmlGrammar } from "./test-grammars/XmlGrammar.js"
-import { RegExpGrammar } from "./test-grammars/RegExpGrammar.js"
+import { Timer } from '../utilities/Timer.js'
+import { jsonSample1, jsonSample2 } from './test-data/TestData.js'
+import { anyOf, buildGrammar } from '../exports/Exports.js'
+import { JsonGrammar } from './test-grammars/JsonGrammar.js'
+import { XmlGrammar } from './test-grammars/XmlGrammar.js'
+import { RegExpGrammar } from './test-grammars/RegExpGrammar.js'
 
 const log = console.log
 
