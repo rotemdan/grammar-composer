@@ -1,4 +1,4 @@
-import { Grammar, GrammarElement, Terminal } from "./GrammarComposer.js"
+import { Grammar, GrammarElement, Terminal } from "./Grammar.js"
 
 export function parse(inputString: string, grammar: Grammar<any>) {
 	const inputLength = inputString.length

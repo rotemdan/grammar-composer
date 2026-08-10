@@ -1,1 +1,1 @@
-export * from '../parser-generator/GrammarComposer.js'
+export * from '../parser-generator/Grammar.js'
