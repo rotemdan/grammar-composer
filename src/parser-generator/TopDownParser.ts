@@ -1,3 +1,4 @@
+import { isNumber } from '../utilities/Utilities.js'
 import { Grammar, GrammarElement, Terminal } from './Grammar.js'
 
 export function parse(inputString: string, grammar: Grammar<any>) {
@@ -18,37 +19,30 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 	}
 
 	function tryParse(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		if (grammarElement.cached === true) {
+		if (isNumber(grammarElement.cacheId)) {
 			return tryParseCached(grammarElement, startOffset)
 		} else {
 			return tryParseUncached(grammarElement, startOffset)
 		}
 	}
 
-	type Slot = Map<GrammarElement, ParseResult | null> | undefined
+	const offsetMultiplier = grammar.maxCacheId + 1
 
-	const cachedParseResults: Slot[] = new Array(inputLength)
+	const parseResultsCache = new Map<number, ParseResult | null>()
 
 	function tryParseCached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		let slot = cachedParseResults[startOffset]
+		const cacheId = grammarElement.cacheId!
+		const cacheKey = (startOffset * offsetMultiplier) + cacheId
 
-		if (slot === undefined) {
-			slot = new Map<GrammarElement, ParseResult | null>()
-
-			cachedParseResults[startOffset] = slot
+		if (parseResultsCache.has(cacheKey)) {
+			return parseResultsCache.get(cacheKey)!
 		} else {
-			const cachedResult = slot.get(grammarElement)
+			const parseResult = tryParseUncached(grammarElement, startOffset)
 
-			if (cachedResult !== undefined) {
-				return cachedResult
-			}
+			parseResultsCache.set(cacheKey, parseResult)
+
+			return parseResult
 		}
-
-		const parseResult = tryParseUncached(grammarElement, startOffset)
-
-		slot.set(grammarElement, parseResult)
-
-		return parseResult
 	}
 
 	function tryParseUncached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {

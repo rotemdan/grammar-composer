@@ -34,15 +34,20 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		optionalNonterminalLookup.set(objectProperty, newOptionalNonterminal)
 	}
 
-	let uniqueIdCounter = 0
-	const uniqueIdSource = () => uniqueIdCounter++
+	let cacheIdCounter = 0
+	const getNewCacheId = () => {
+		const newCacheId = cacheIdCounter
+		cacheIdCounter += 1
+
+		return newCacheId
+	}
 
 	for (const [func, nonterminal] of nonterminalLookup) {
 		const preparedContent = prepareGrammarElement(
 			nonterminal.content,
 			nonterminalLookup,
 			optionalNonterminalLookup,
-			uniqueIdSource)
+			getNewCacheId)
 
 		nonterminal.content = preparedContent
 
@@ -68,7 +73,7 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 	return new Grammar<T>(
 		nonterminals,
 		startProductionName,
-		uniqueIdCounter
+		cacheIdCounter
 	)
 }
 
@@ -76,41 +81,44 @@ function prepareGrammarElement(
 	rootElement: GrammarElement,
 	nonterminalLookup: Map<Function, Nonterminal>,
 	optionalNonterminalLookup: Map<Function, Nonterminal>,
-	getUniqueId: () => number
+	getNewCacheId: () => number
 ): GrammarElement {
 	function prepare(element: GrammarElement): GrammarElement {
+		const setCacheIdIfNeeded = (element: GrammarElement) => {
+			if (element.cached === true) {
+				element.cacheId = getNewCacheId()
+			}
+
+			return element
+		}
+
 		switch (element.type) {
 			case 'StringTerminal':
 			case 'Nonterminal': {
-				if (element.uniqueId === undefined) {
-					element.uniqueId = getUniqueId()
-				}
-
-				return element
+				return setCacheIdIfNeeded({
+					...element
+				})
 			}
 
 			case 'PatternTerminal': {
-				return {
+				return setCacheIdIfNeeded({
 					...element,
-					uniqueId: getUniqueId()
-				}
+				})
 			}
 
 			case 'Repetition': {
-				return {
+				return setCacheIdIfNeeded({
 					...element,
 					content: prepare(element.content),
-					uniqueId: getUniqueId()
-				}
+				})
 			}
 
 			case 'Sequence':
 			case 'Choice': {
-				return {
+				return setCacheIdIfNeeded({
 					...element,
 					members: element.members.map(element => prepare(element)),
-					uniqueId: getUniqueId()
-				}
+				})
 			}
 
 			case 'NonterminalReference': {
@@ -128,23 +136,16 @@ function prepareGrammarElement(
 					throw new Error(`Couldn't resolve function reference in grammar element: ${JSON.stringify(element)}`)
 				}
 
-				if (element.cached !== undefined || element.uniqueId !== undefined) {
-					const clonedNonterminal = { ...nonterminal }
+				if (element.cached === true) {
+					return {
+						...nonterminal,
 
-					if (element.cached !== undefined) {
-						clonedNonterminal.cached = element.cached
+						cached: true,
+						cacheId: getNewCacheId(),
 					}
-
-					clonedNonterminal.uniqueId = getUniqueId()
-
-					return clonedNonterminal
+				} else {
+					return nonterminal
 				}
-
-				if (nonterminal.uniqueId === undefined) {
-					nonterminal.uniqueId = getUniqueId()
-				}
-
-				return nonterminal
 			}
 		}
 	}
@@ -407,7 +408,8 @@ export function zeroOrMore(content: Production): Repetition {
 	return {
 		type: 'Repetition',
 		content: productionToGrammarElement(content),
-		optional: true
+		optional: true,
+		cached: false,
 	}
 }
 
@@ -415,7 +417,8 @@ export function oneOrMore(content: Production): Repetition {
 	return {
 		type: 'Repetition',
 		content: productionToGrammarElement(content),
-		optional: false
+		optional: false,
+		cached: false,
 	}
 }
 
@@ -430,7 +433,8 @@ export function anyOf(...members: Production[]): Choice {
 		type: 'Choice',
 		members: normalizedMembers,
 		optional: false,
-		exhaustive: false
+		exhaustive: false,
+		cached: false,
 	}
 }
 
@@ -445,7 +449,9 @@ export function bestOf(...members: Production[]): Choice {
 		type: 'Choice',
 		members: normalizedMembers,
 		optional: false,
-		exhaustive: true
+		exhaustive: true,
+
+		cached: false,
 	}
 }
 
@@ -468,6 +474,8 @@ export function pattern(pattern: Pattern): PatternTerminal {
 		pattern,
 		regExp,
 		optional,
+
+		cached: false,
 	}
 }
 
@@ -490,7 +498,9 @@ function stringTerminal(content: string): StringTerminal {
 	return {
 		type: 'StringTerminal',
 		content,
-		optional: false
+		optional: false,
+
+		cached: false,
 	}
 }
 
@@ -504,6 +514,8 @@ function nonterminal(name: string, content: GrammarElement): Nonterminal {
 		name,
 		content,
 		optional: false,
+
+		cached: false,
 	}
 }
 
@@ -511,7 +523,9 @@ function sequence(members: GrammarElement[]): Sequence {
 	return {
 		type: 'Sequence',
 		members,
-		optional: false
+		optional: false,
+
+		cached: false,
 	}
 }
 
@@ -519,7 +533,9 @@ function unresolvedReference(reference: Function): NonterminalReference {
 	return {
 		type: 'NonterminalReference',
 		reference,
-		optional: false
+		optional: false,
+
+		cached: false,
 	}
 }
 
@@ -543,12 +559,13 @@ function productionToGrammarElement(production: Production): GrammarElement {
 export class Grammar<T> {
 	readonly productions: Record<keyof T, any>
 	readonly startProductionName: keyof T
-	readonly maxElementId: number
 
-	constructor(productions: Record<keyof T, any>, startProductionName: keyof T, maxElementId: number) {
+	readonly maxCacheId: number
+
+	constructor(productions: Record<keyof T, any>, startProductionName: keyof T, maxCacheId: number) {
 		this.startProductionName = startProductionName
 		this.productions = productions
-		this.maxElementId = maxElementId
+		this.maxCacheId = maxCacheId
 	}
 
 	parse(text: string) {
@@ -574,8 +591,9 @@ export type GrammarElement =
 interface GrammarElementBase {
 	type: string
 	optional: boolean
-	uniqueId?: number
-	cached?: boolean
+
+	cached: boolean
+	cacheId?: number
 }
 
 export type Terminal = StringTerminal | PatternTerminal
