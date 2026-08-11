@@ -4,6 +4,8 @@ import { anyOf, buildGrammar } from '../exports/Exports.js'
 import { JsonGrammar } from './test-grammars/JsonGrammar.js'
 import { XmlGrammar } from './test-grammars/XmlGrammar.js'
 import { RegExpGrammar } from './test-grammars/RegExpGrammar.js'
+import { writeFile } from 'fs/promises'
+import { SimpleTestGrammar1 } from './test-grammars/SimpleTestGrammar1.js'
 
 const log = console.log
 
@@ -83,9 +85,11 @@ function testXmlParser() {
 
 async function testRegExpParser() {
 	const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
-	//const regExpString = /^asdf{$/.source
+	//const regExpString = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.source
+	//const regExpString = /(?=.*[!@#$%^&*])^mongodb:\/\/(?<user>[a-zA-Z0-9]+):(?<pass>[a-zA-Z0-9!@#$%^&*]{8,})@(?<host>[a-z0-9.-]+):(?<port>\d{2,5})$/.source
+	//const regExpString = /(abcd)*ef+g/.source
 
-	const grammar = buildGrammar(RegExpGrammar, 'disjunction')
+	const grammar = buildGrammar(RegExpGrammar, 'root')
 
 	const parseTree = grammar.parse(regExpString)
 
@@ -93,13 +97,10 @@ async function testRegExpParser() {
 
 	log(parseTreeJson)
 
-	const { writeFile } = await import('fs/promises')
-
 	await writeFile('out/out.json', parseTreeJson)
 }
 
-
-async function testParserError1() {
+function testParserError1() {
 	const xmlData = `<hello> wo rld <!!! `
 
 	const grammar = buildGrammar(XmlGrammar, 'document')
@@ -109,7 +110,7 @@ async function testParserError1() {
 	console.log(JSON.stringify(result, undefined, 4))
 }
 
-async function testParserError2() {
+function testParserError2() {
 	const jsonData = `{ "asdf": 12.5 `
 
 	const grammar = buildGrammar(JsonGrammar, 'expression')
@@ -119,6 +120,19 @@ async function testParserError2() {
 	console.log(JSON.stringify(result, undefined, 4))
 }
 
+function test1() {
+	const input = `abcdefg`
+
+	const grammar = buildGrammar(SimpleTestGrammar1, 'root')
+
+	const result = grammar.parse(input)
+
+	console.log(JSON.stringify(result, undefined, 4))
+}
+
+
 //testJsonParser()
 
 testRegExpParser()
+
+//test1()
