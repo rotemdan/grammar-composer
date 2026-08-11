@@ -5,85 +5,112 @@ export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// High-level productions
 	//////////////////////////////////////////////////////////////////////////////////////////////
+	root = () => this.sequenceOrDisjunction
+
 	disjunction = () => [
 		this.sequence,
 
-		G.possibly([
-			this.disjunctionSeparator,
-			this.disjunction,
+		G.oneOrMore([
+			'|',
+			this.sequence,
 		])
 	]
 
-	sequence = () => G.zeroOrMore(this.element)
-
-	element = () => G.anyOf(
-		this.anchor,
-		this.lookaround,
-		this.possiblyQuantifiedExpression,
+	sequence = () => G.cached(
+		G.zeroOrMore(this.sequenceElement)
 	)
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	// Quantifed expressions
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	possiblyQuantifiedExpression = () => [
+	sequenceOrDisjunction = [
 		G.anyOf(
-			this.group,
-			this.backReference,
-			this.singleCharExpression
-		),
-
-		G.possibly(G.anyOf(
-			this.starQuantifier,
-			this.plusQuantifier,
-			this.exactCountQuantifier,
-			this.countRangeQuantifier,
-		)),
-
-		G.possibly(this.nongreedyQuantifier), // Nongreedy quantifier
+			this.disjunction,
+			this.sequence,
+		)
 	]
 
-	exactCountQuantifier = () => G.pattern([
-		'{',
-		R.captureAs('count', R.oneOrMore(digit)),
-		'}',
-	])
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	// Quantifier expressions
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	starQuantifier = () => [
+		'*',
+		G.possibly(this.nongreedyQuantifier)
+	]
 
-	countRangeQuantifier = () => G.pattern([
-		'{',
-		R.captureAs('start', R.oneOrMore(digit)),
-		',',
-		R.possibly(R.captureAs('end', R.oneOrMore(digit))),
-		'}',
-	])
+	plusQuantifier = () => [
+		'+',
+		G.possibly(this.nongreedyQuantifier)
+	]
+
+	optionalQuantifier = () => [
+		'?',
+		G.possibly(this.nongreedyQuantifier)
+	]
+
+	exactCountQuantifier = () => [
+		G.pattern([
+			'{',
+			R.captureAs('count',
+				R.oneOrMore(digit)
+			),
+			'}',
+		]),
+		G.possibly(this.nongreedyQuantifier)
+	]
+
+	countRangeQuantifier = () => [
+		G.pattern([
+			'{',
+			R.captureAs('start',
+				R.oneOrMore(digit)
+			),
+			',',
+			R.possibly(R.captureAs('end',
+				R.oneOrMore(digit))
+			),
+			'}',
+		]),
+		G.possibly(this.nongreedyQuantifier)
+	]
+
+	nongreedyQuantifier = () => '?'
+
+	quantifier = () => G.anyOf(
+		this.starQuantifier,
+		this.plusQuantifier,
+		this.optionalQuantifier,
+		this.exactCountQuantifier,
+		this.countRangeQuantifier,
+	)
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// Group expressions
 	//////////////////////////////////////////////////////////////////////////////////////////////
-	group = () => G.anyOf(
-		this.uncapturedGroup,
-		this.namedCaptureGroup,
-		this.unnamedCaptureGroup,
-	)
-
 	uncapturedGroup = () => [
 		'(?:',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
 	namedCaptureGroup = () => [
 		'(?<',
-		G.pattern(R.captureAs('name', R.oneOrMore(identifierChar))),
+		G.pattern(R.captureAs('name',
+			R.oneOrMore(identifierChar))
+		),
 		'>',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
 	unnamedCaptureGroup = () => [
 		'(',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
+
+	group = G.anyOf(
+		this.uncapturedGroup,
+		this.namedCaptureGroup,
+		this.unnamedCaptureGroup,
+	)
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// Backreferences
@@ -91,13 +118,17 @@ export class RegExpGrammar {
 	unnamedBackreference = () =>
 		G.pattern([
 			'\\',
-			R.captureAs('index', digit),
+			R.captureAs('index',
+				digit
+			),
 		])
 
 	namedBackreference = () =>
 		G.pattern([
 			'\\k<',
-			R.captureAs('name', R.oneOrMore(identifierChar)),
+			R.captureAs('name',
+				R.oneOrMore(identifierChar)
+			),
 			'>',
 		])
 
@@ -111,25 +142,25 @@ export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	positiveLookahead = () => [
 		'(?=',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
 	negativeLookahead = () => [
 		'(?!',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
 	positiveLookbehind = () => [
 		'(?<=',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
 	negativeLookbehind = () => [
 		'(?<!',
-		this.disjunction,
+		this.sequenceOrDisjunction,
 		')',
 	]
 
@@ -154,24 +185,31 @@ export class RegExpGrammar {
 	)
 
 	unreservedCharLiteral = () => G.pattern(
-		R.notAnyOfChars('[', '.', '*', '+', '?', '^', '$', '{', '}', '(', ')', '|', ']', '\\')
+		R.captureAs('char',
+			R.notAnyOfChars('[', '.', '*', '+', '?', '^', '$', '{', '}', '(', ')', '|', ']', '\\')
+		)
 	)
 
 	escapedCharLiteral = () => G.pattern([
 		'\\',
-		R.anyChar
+		R.captureAs('char',
+			R.anyChar
+		)
 	])
 
 	hexCharcode = () =>
 		G.pattern([
 			'\\x',
-			hexDigit,
-			hexDigit
+			R.captureAs('value',
+				R.repeated(2, hexDigit)
+			)
 		])
 
 	controlCharcode = () => G.pattern([
 		'\\c',
-		R.anyOf(R.charRange('A', 'Z'), R.charRange('a', 'z')),
+		R.captureAs('value',
+			R.anyOf(R.charRange('A', 'Z'), R.charRange('a', 'z'))
+		)
 	])
 
 	nullCharcode = () => G.pattern('\\0')
@@ -180,24 +218,29 @@ export class RegExpGrammar {
 		G.pattern([
 			'\\u',
 			'{',
-			R.captureAs('value', R.repeated([1, 6], hexDigit)),
+			R.captureAs('value',
+				R.repeated([1, 6], hexDigit)
+			),
 			'}',
 		]),
 		G.pattern([
 			'\\u',
-			hexDigit,
-			hexDigit,
-			hexDigit,
-			hexDigit
+			R.captureAs('value',
+				R.repeated(4, hexDigit)
+			)
 		])
 	)
 
 	codepointRange = () => G.pattern([
 		'\\u',
 		'{',
-		R.captureAs('start', R.oneOrMore(hexDigit)),
+		R.captureAs('start',
+			R.oneOrMore(hexDigit)
+		),
 		'-',
-		R.captureAs('end', R.oneOrMore(hexDigit)),
+		R.captureAs('end',
+			R.oneOrMore(hexDigit)
+		),
 		'}',
 	])
 
@@ -213,15 +256,17 @@ export class RegExpGrammar {
 
 	unicodePropertyBodyPattern: R.Pattern = [
 		'{',
-		R.captureAs('property', R.oneOrMore(R.anyOf(letter, digit, '_', '-'))),
+		R.captureAs('property',
+			R.oneOrMore(R.anyOf(letter, digit, '_', '-'))
+		),
 		R.possibly([
 			'=',
-			R.captureAs('value', R.oneOrMore(R.anyOf(letter, digit, '_', '-'))),
+			R.captureAs('value',
+				R.oneOrMore(R.anyOf(letter, digit, '_', '-'))
+			),
 		]),
 		'}',
 	]
-
-	charClassChar = () => G.pattern(R.notAnyOfChars(']'))
 
 	charClass = () => [
 		'[',
@@ -233,7 +278,7 @@ export class RegExpGrammar {
 			this.notUnicodeProperty,
 			this.escapedCharacterClass,
 			this.charcodeOrEscapedChar,
-			this.charClassChar
+			this.charClassLiteral
 		)),
 		']',
 	]
@@ -242,27 +287,33 @@ export class RegExpGrammar {
 		this.codepoint,
 		this.hexCharcode,
 		this.controlCharcode,
+		this.nullCharcode,
 		this.escapedCharLiteral,
+	)
+
+	charClassLiteral = () => G.pattern(
+		R.captureAs('char',
+			R.notAnyOfChars(']')
+		)
 	)
 
 	charRangeElement = G.anyOf(
 		this.charcodeOrEscapedChar,
-		G.pattern(R.notAnyOfChars(']')),
+		this.charClassLiteral,
 	)
 
+	charRangeStart = () => this.charRangeElement
+	charRangeEnd = () => this.charRangeElement
+
 	charRange = () => [
-		this.charRangeElement,
+		this.charRangeStart,
 		'-',
-		this.charRangeElement,
+		this.charRangeEnd,
 	]
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// Special symbols
 	//////////////////////////////////////////////////////////////////////////////////////////////
-	starQuantifier = () => '*'
-	plusQuantifier = () => '+'
-	nongreedyQuantifier = () => '?'
-
 	charClassNegator = () => '^'
 
 	inputStartAnchor = () => '^'
@@ -270,34 +321,61 @@ export class RegExpGrammar {
 
 	anyCharWildcard = () => '.'
 
-	disjunctionSeparator = () => '|'
-
 	anchor = G.anyOf(this.inputStartAnchor, this.inputEndAnchor)
 
 	escapedCharacterClass = () => G.pattern(R.anyOf(
-		R.captureAs('whitespace', escapedCharString.whitespace),
-		R.captureAs('nonWhitespace', escapedCharString.nonWhitespace),
-		R.captureAs('digit', escapedCharString.digit),
-		R.captureAs('nonDigit', escapedCharString.nonDigit),
-		R.captureAs('word', escapedCharString.word),
-		R.captureAs('nonWord', escapedCharString.nonWord),
-		R.captureAs('wordBoundary', escapedCharString.wordBoundary),
-		R.captureAs('nonWordBoundary', escapedCharString.nonWordBoundary),
-		R.captureAs('formFeed', escapedCharString.formFeed),
-		R.captureAs('carriageReturn', escapedCharString.carriageReturn),
-		R.captureAs('lineFeed', escapedCharString.lineFeed),
-		R.captureAs('tab', escapedCharString.tab),
-		R.captureAs('verticalTab', escapedCharString.verticalTab),
-		R.captureAs('backwardSlash', escapedCharString.backwardSlash),
+		R.captureAs('whitespace', escapedChars.whitespace),
+		R.captureAs('nonWhitespace', escapedChars.nonWhitespace),
+		R.captureAs('digit', escapedChars.digit),
+		R.captureAs('nonDigit', escapedChars.nonDigit),
+		R.captureAs('word', escapedChars.word),
+		R.captureAs('nonWord', escapedChars.nonWord),
+		R.captureAs('wordBoundary', escapedChars.wordBoundary),
+		R.captureAs('nonWordBoundary', escapedChars.nonWordBoundary),
+		R.captureAs('formFeed', escapedChars.formFeed),
+		R.captureAs('carriageReturn', escapedChars.carriageReturn),
+		R.captureAs('lineFeed', escapedChars.lineFeed),
+		R.captureAs('tab', escapedChars.tab),
+		R.captureAs('verticalTab', escapedChars.verticalTab),
+		R.captureAs('backwardSlash', escapedChars.backwardSlash),
 	))
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	// Sequence elements (positioned here due to TypeScript class member ordering requirements)
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	quantifiableExpression = G.cached(
+		G.anyOf(
+			this.group,
+			this.backReference,
+			this.singleCharExpression
+		)
+	)
+
+	quantifiedExpression = () => [
+		this.quantifiableExpression,
+		this.quantifier,
+	]
+
+	sequenceElement = G.anyOf(
+		this.anchor,
+		this.lookaround,
+		this.quantifiedExpression,
+		this.quantifiableExpression,
+	)
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Shared regular expressions
+//////////////////////////////////////////////////////////////////////////////////////////////
 const digit = R.charRange('0', '9')
 const letter = R.anyOf(R.charRange('a', 'z'), R.charRange('A', 'Z'))
 const hexDigit = R.anyOf(digit, R.charRange('a', 'f'), R.charRange('A', 'F'))
 const identifierChar = R.anyOf(letter, digit, '_', '$')
 
-const escapedCharString = {
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Escaped characters lookup
+//////////////////////////////////////////////////////////////////////////////////////////////
+const escapedChars = {
 	whitespace: '\\s',
 	nonWhitespace: '\\S',
 	digit: '\\d',
