@@ -5,7 +5,14 @@ export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	// High-level productions
 	//////////////////////////////////////////////////////////////////////////////////////////////
-	root = () => this.sequenceOrDisjunction
+	root = () => this.disjunctionOrSequence
+
+	disjunctionOrSequence = () => [
+		G.anyOf(
+			this.disjunction,
+			this.sequence,
+		)
+	]
 
 	disjunction = () => [
 		this.sequence,
@@ -20,11 +27,27 @@ export class RegExpGrammar {
 		G.zeroOrMore(this.sequenceElement)
 	)
 
-	sequenceOrDisjunction = [
+	sequenceElement = () => G.anyOf(
+		this.anchor,
+		this.lookaround,
+		this.quantifiedExpression,
+		this.quantifiableExpression,
+	)
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	// Quantifiable expression
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	quantifiableExpression = () => G.cached(
 		G.anyOf(
-			this.disjunction,
-			this.sequence,
+			this.group,
+			this.backReference,
+			this.singleCharExpression
 		)
+	)
+
+	quantifiedExpression = () => [
+		this.quantifiableExpression,
+		this.quantifier,
 	]
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +109,7 @@ export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	uncapturedGroup = () => [
 		'(?:',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
@@ -96,17 +119,17 @@ export class RegExpGrammar {
 			R.oneOrMore(identifierChar))
 		),
 		'>',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
 	unnamedCaptureGroup = () => [
 		'(',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
-	group = G.anyOf(
+	group = () => G.anyOf(
 		this.uncapturedGroup,
 		this.namedCaptureGroup,
 		this.unnamedCaptureGroup,
@@ -132,7 +155,7 @@ export class RegExpGrammar {
 			'>',
 		])
 
-	backReference = G.anyOf(
+	backReference = () => G.anyOf(
 		this.unnamedBackreference,
 		this.namedBackreference,
 	)
@@ -142,29 +165,29 @@ export class RegExpGrammar {
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	positiveLookahead = () => [
 		'(?=',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
 	negativeLookahead = () => [
 		'(?!',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
 	positiveLookbehind = () => [
 		'(?<=',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
 	negativeLookbehind = () => [
 		'(?<!',
-		this.sequenceOrDisjunction,
+		this.disjunctionOrSequence,
 		')',
 	]
 
-	lookaround = G.anyOf(
+	lookaround = () => G.anyOf(
 		this.positiveLookahead,
 		this.negativeLookahead,
 		this.positiveLookbehind,
@@ -244,17 +267,17 @@ export class RegExpGrammar {
 		'}',
 	])
 
-	unicodeProperty = () => G.pattern([
+	unicodeProperty = () => [
 		'\\p',
 		this.unicodePropertyBodyPattern,
-	])
+	]
 
-	notUnicodeProperty = () => G.pattern([
+	notUnicodeProperty = () => [
 		'\\P',
 		this.unicodePropertyBodyPattern,
-	])
+	]
 
-	unicodePropertyBodyPattern: R.Pattern = [
+	unicodePropertyBodyPattern = () => G.pattern([
 		'{',
 		R.captureAs('property',
 			R.oneOrMore(R.anyOf(letter, digit, '_', '-'))
@@ -266,7 +289,7 @@ export class RegExpGrammar {
 			),
 		]),
 		'}',
-	]
+	])
 
 	charClass = () => [
 		'[',
@@ -283,7 +306,7 @@ export class RegExpGrammar {
 		']',
 	]
 
-	charcodeOrEscapedChar = G.anyOf(
+	charcodeOrEscapedChar = () => G.anyOf(
 		this.codepoint,
 		this.hexCharcode,
 		this.controlCharcode,
@@ -297,7 +320,7 @@ export class RegExpGrammar {
 		)
 	)
 
-	charRangeElement = G.anyOf(
+	charRangeElement = () => G.anyOf(
 		this.charcodeOrEscapedChar,
 		this.charClassLiteral,
 	)
@@ -321,7 +344,8 @@ export class RegExpGrammar {
 
 	anyCharWildcard = () => '.'
 
-	anchor = G.anyOf(this.inputStartAnchor, this.inputEndAnchor)
+	anchor = () =>
+		G.anyOf(this.inputStartAnchor, this.inputEndAnchor)
 
 	escapedCharacterClass = () => G.pattern(R.anyOf(
 		R.captureAs('whitespace', escapedChars.whitespace),
@@ -339,29 +363,6 @@ export class RegExpGrammar {
 		R.captureAs('verticalTab', escapedChars.verticalTab),
 		R.captureAs('backwardSlash', escapedChars.backwardSlash),
 	))
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	// Sequence elements (positioned here due to TypeScript class member ordering requirements)
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	quantifiableExpression = G.cached(
-		G.anyOf(
-			this.group,
-			this.backReference,
-			this.singleCharExpression
-		)
-	)
-
-	quantifiedExpression = () => [
-		this.quantifiableExpression,
-		this.quantifier,
-	]
-
-	sequenceElement = G.anyOf(
-		this.anchor,
-		this.lookaround,
-		this.quantifiedExpression,
-		this.quantifiableExpression,
-	)
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,3 +392,21 @@ const escapedChars = {
 	verticalTab: '\\v',
 	backwardSlash: '\\\\'
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Wrapped nonterminal names
+//////////////////////////////////////////////////////////////////////////////////////////////
+export const regExpGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<RegExpGrammar> = [
+	'disjunctionOrSequence',
+	'group',
+	'backReference',
+	'lookaround',
+	'unicodeProperty',
+	'notUnicodeProperty',
+	'unicodePropertyBodyPattern',
+	'charcodeOrEscapedChar',
+	'charRangeElement',
+	'anchor',
+	'quantifiableExpression',
+	'sequenceElement',
+]

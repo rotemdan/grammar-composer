@@ -2,33 +2,48 @@ import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-comp
 import { isArray, isBoolean, isFunction, isString } from '../utilities/Utilities.js'
 
 import { parse } from './TopDownParser.js'
+import { detectAndAnnotateOptionalNodes, detectAndErrorOnLeftRecursion, validatePatternCaptureGroups } from './StaticAnalysis.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Grammar builder method
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () => T), startProductionName: keyof T): Grammar<T> {
-	if (isFunction(obj)) {
-		obj = new obj()
+export function buildGrammar<T extends { [key: string]: any }>(
+	definitionObject: T | (new () => T),
+	startProductionName: keyof T,
+	options?: GrammarBuilderOptions<T>): Grammar<T> {
+
+	options = {
+		unwrappedNonterminalNames: [],
+		...options
+	}
+
+	if (isFunction(definitionObject)) {
+		definitionObject = new definitionObject()
 	}
 
 	const nameLookup = new Map<any, keyof T>()
 	const nonterminalLookup = new Map<Function, Nonterminal>()
 	const optionalNonterminalLookup = new Map<Function, Nonterminal>()
 
-	for (const key in obj) {
-		const objectProperty = obj[key]
+	for (const key in definitionObject) {
+		const objectProperty = definitionObject[key]
 
 		nameLookup.set(objectProperty, key)
 
 		if (!isFunction(objectProperty)) {
-			continue
+			throw new Error(`Grammar definition contains a property '${key}', which is not a function. All object properties must be productions, declared as functions.`)
 		}
 
-		const productionContent = objectProperty.call(obj)
+		const productionContent = objectProperty.call(definitionObject)
 		const normalizedProduction = productionToGrammarElement(productionContent)
+		const isUnwrappedNonterminal = options.unwrappedNonterminalNames?.includes(key) === true
 
-		const newNonterminal = nonterminal(key, normalizedProduction)
-		const newOptionalNonterminal = { ...newNonterminal, optional: true }
+		const newNonterminal = nonterminal(key, normalizedProduction, isUnwrappedNonterminal)
+		const newOptionalNonterminal = {
+			...newNonterminal,
+			optional: true,
+			grammarNonterminal: newNonterminal,
+		}
 
 		nonterminalLookup.set(objectProperty, newNonterminal)
 		optionalNonterminalLookup.set(objectProperty, newOptionalNonterminal)
@@ -55,7 +70,7 @@ export function buildGrammar<T extends { [key: string]: any }>(obj: T | (new () 
 		optionalNonterminal.content = preparedContent
 	}
 
-	const startNonterminal = nonterminalLookup.get(obj[startProductionName] as Function)
+	const startNonterminal = nonterminalLookup.get(definitionObject[startProductionName] as Function)
 
 	if (!startNonterminal) {
 		throw new Error(`Couldn't find a start production named '${startProductionName as string}'.`)
@@ -142,6 +157,8 @@ function prepareGrammarElement(
 
 						cached: true,
 						cacheId: getNewCacheId(),
+
+						grammarNonterminal: nonterminal.grammarNonterminal ?? nonterminal
 					}
 				} else {
 					return nonterminal
@@ -154,255 +171,7 @@ function prepareGrammarElement(
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Internal static analysis methods
-/////////////////////////////////////////////////////////////////////////////////////////////////
-function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
-	const visitedNodes = new Set<GrammarElement>()
-
-	const resolvedNodes = new Map<GrammarElement, boolean>()
-	const unresolvedNodes = new Map<GrammarElement, { dependencies: Set<GrammarElement>, isChoice: boolean }>()
-
-	function processDepthFirst(node: GrammarElement): boolean | undefined {
-		if (visitedNodes.has(node)) {
-			return resolvedNodes.get(node)
-		}
-
-		visitedNodes.add(node)
-
-		switch (node.type) {
-			case 'StringTerminal':
-			case 'PatternTerminal': {
-				resolvedNodes.set(node, node.optional)
-
-				return node.optional
-			}
-
-			case 'Nonterminal':
-			case 'Repetition': {
-				const result = processDepthFirst(node.content)
-
-				if (node.optional) {
-					resolvedNodes.set(node, true)
-
-					return true
-				} else if (isBoolean(result)) {
-					resolvedNodes.set(node, result)
-
-					return result
-				} else {
-					unresolvedNodes.set(node, { dependencies: new Set([node.content]), isChoice: false })
-
-					return undefined
-				}
-			}
-
-			case 'Sequence': {
-				const dependencies = new Set<GrammarElement>()
-
-				let hasNonOptionalResolvedMember = false
-
-				for (const element of node.members) {
-					const result = processDepthFirst(element)
-
-					if (isBoolean(result)) {
-						if (result === false) {
-							hasNonOptionalResolvedMember = true
-						}
-					} else {
-						dependencies.add(element)
-					}
-				}
-
-				if (node.optional == true) {
-					resolvedNodes.set(node, true)
-
-					return true
-				} else if (hasNonOptionalResolvedMember) {
-					resolvedNodes.set(node, false)
-
-					return false
-				} else if (dependencies.size == 0) {
-					resolvedNodes.set(node, true)
-
-					return true
-				} else {
-					unresolvedNodes.set(node, { dependencies, isChoice: false })
-
-					return undefined
-				}
-			}
-
-			case 'Choice': {
-				const dependencies = new Set<GrammarElement>()
-				let hasOptionalResolvedMember = false
-
-				for (const element of node.members) {
-					const result = processDepthFirst(element)
-
-					if (isBoolean(result)) {
-						if (result === true) {
-							hasOptionalResolvedMember = true
-						}
-					} else {
-						dependencies.add(element)
-					}
-				}
-
-				if (node.optional == true) {
-					resolvedNodes.set(node, true)
-
-					return true
-				} else if (hasOptionalResolvedMember) {
-					resolvedNodes.set(node, true)
-
-					return true
-				} else if (dependencies.size == 0) {
-					resolvedNodes.set(node, false)
-
-					return false
-				} else {
-					unresolvedNodes.set(node, { dependencies, isChoice: true })
-
-					return undefined
-				}
-			}
-		}
-
-		return undefined
-	}
-
-	// Process depth first to resolve the easy cases, for productions that contain
-	// no cyclic references:
-	processDepthFirst(rootNode)
-
-	// Now the remainder consists of nodes containing cyclic references that have not yet been resolved.
-	// Use a form of iterative elimination and substitution to resolve them:
-	while (unresolvedNodes.size > 0) {
-		// This variable tracks whether at least one dependency was resolved, in any node.
-		// If it stays false, it means that no improvement was made during the iteration,
-		// and we should exit the loop.
-		let atLastOneDependencyResolvedInAnyNode = false
-		const nodesToDelete: GrammarElement[] = []
-
-		// Scan the unresolved nodes to locate any new resolved dependencies
-		for (const [node, { dependencies, isChoice }] of unresolvedNodes) {
-			let nodeResolved = false
-
-			// Iterate over all unresolved dependencies for the node
-			for (const dependency of Array.from(dependencies)) {
-				// Check if the dependency has been resolved
-				const value = resolvedNodes.get(dependency)
-
-				if (value !== undefined) {
-					// If it did, record that some dependencies were resolved
-					atLastOneDependencyResolvedInAnyNode = true
-
-					if (isChoice) {
-						if (value === true) {
-							resolvedNodes.set(node, true)
-							nodeResolved = true
-							break
-						}
-					} else {
-						if (value === false) {
-							resolvedNodes.set(node, false)
-							nodeResolved = true
-							break
-						}
-					}
-
-					dependencies.delete(dependency)
-				}
-			}
-
-			if (nodeResolved) {
-				nodesToDelete.push(node)
-			} else if (dependencies.size === 0) {
-				if (isChoice) {
-					resolvedNodes.set(node, false)
-				} else {
-					resolvedNodes.set(node, true)
-				}
-
-				nodesToDelete.push(node)
-			}
-		}
-
-		for (const node of nodesToDelete) {
-			unresolvedNodes.delete(node)
-		}
-
-		// If not even one dependency was eliminated for any node,
-		// it means that only mutually cyclic nodes are left unresolved, so exit the loop.
-		if (!atLastOneDependencyResolvedInAnyNode) {
-			break
-		}
-	}
-
-	// All remaining unresolved nodes must now be optional,
-	// since they are all mutually cyclic and all their non-cyclic grammar elements are known to be optional.
-	for (const node of unresolvedNodes.keys()) {
-		resolvedNodes.set(node, true)
-		unresolvedNodes.delete(node)
-	}
-
-	// Finally set the 'optional' property of all nodes based on the detected values.
-	for (const [node, isOptional] of resolvedNodes) {
-		node.optional = isOptional
-	}
-}
-
-function detectAndErrorOnLeftRecursion(rootNode: GrammarElement) {
-	const currentlyIteratedNodes = new Set<GrammarElement>()
-
-	function detect(node: GrammarElement) {
-		if (currentlyIteratedNodes.has(node)) {
-			if (node.type === 'Nonterminal') {
-				throw new Error(`Detected left recursion for nonterminal '${node.name}'.`)
-			} else {
-				throw new Error(`Detected left recursion for node: ${JSON.stringify(node, undefined, 4)}`)
-			}
-		}
-
-		currentlyIteratedNodes.add(node)
-
-		switch (node.type) {
-			case 'Nonterminal':
-			case 'Repetition': {
-				detect(node.content)
-
-				break
-			}
-
-			case 'Sequence': {
-				for (const member of node.members) {
-					detect(member)
-
-					if (!member.optional) {
-						break
-					}
-				}
-
-				break
-			}
-
-			case 'Choice': {
-				for (const member of node.members) {
-					detect(member)
-				}
-
-				break
-			}
-		}
-
-		currentlyIteratedNodes.delete(node)
-	}
-
-	detect(rootNode)
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// Exported builder methods
+// Exported AST builder functions
 /////////////////////////////////////////////////////////////////////////////////////////////////
 export function zeroOrMore(content: Production): Repetition {
 	return {
@@ -423,7 +192,7 @@ export function oneOrMore(content: Production): Repetition {
 }
 
 export function anyOf(...members: Production[]): Choice {
-	if (members.length == 0) {
+	if (members.length === 0) {
 		throw new Error(`'anyOf' requires at least one member.`)
 	}
 
@@ -439,7 +208,7 @@ export function anyOf(...members: Production[]): Choice {
 }
 
 export function bestOf(...members: Production[]): Choice {
-	if (members.length == 0) {
+	if (members.length === 0) {
 		throw new Error(`'bestOf' requires at least one member.`)
 	}
 
@@ -466,6 +235,8 @@ export function pattern(pattern: Pattern): PatternTerminal {
 		pattern = [inputStart, pattern]
 	}
 
+	validatePatternCaptureGroups(pattern)
+
 	const regExp = buildRegExp(pattern)
 	const optional = isPatternOptional(pattern)
 
@@ -488,7 +259,7 @@ export function uncached<T extends Production>(content: Production): T {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Internal builder methods
+// Internal AST builder methods
 /////////////////////////////////////////////////////////////////////////////////////////////////
 function stringTerminal(content: string): StringTerminal {
 	if (content.length < 1) {
@@ -504,7 +275,7 @@ function stringTerminal(content: string): StringTerminal {
 	}
 }
 
-function nonterminal(name: string, content: GrammarElement): Nonterminal {
+function nonterminal(name: string, content: GrammarElement, unwrapped: boolean): Nonterminal {
 	if (name.length < 1) {
 		throw new Error(`A nonterminal name must include at least 1 character.`)
 	}
@@ -513,9 +284,10 @@ function nonterminal(name: string, content: GrammarElement): Nonterminal {
 		type: 'Nonterminal',
 		name,
 		content,
-		optional: false,
 
+		optional: false,
 		cached: false,
+		unwrapped,
 	}
 }
 
@@ -554,7 +326,7 @@ function productionToGrammarElement(production: Production): GrammarElement {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Type definitions
+// Grammar class
 /////////////////////////////////////////////////////////////////////////////////////////////////
 export class Grammar<T> {
 	readonly productions: Record<keyof T, any>
@@ -577,6 +349,9 @@ export class Grammar<T> {
 	}
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Type definitions
+/////////////////////////////////////////////////////////////////////////////////////////////////
 export type Production = string | GrammarElement | (() => Production) | Production[]
 
 export type GrammarElement =
@@ -594,6 +369,10 @@ interface GrammarElementBase {
 
 	cached: boolean
 	cacheId?: number
+
+	// The name of the grammar property this element was assigned to, if any.
+	// Used by the parser to refer to the element by name in error messages.
+	name?: string
 }
 
 export type Terminal = StringTerminal | PatternTerminal
@@ -613,6 +392,12 @@ export interface Nonterminal extends GrammarElementBase {
 	type: 'Nonterminal'
 	name: string
 	content: GrammarElement
+	unwrapped: boolean
+
+	// The canonical nonterminal as defined in the grammar. Clones created for
+	// optional references and cached references keep a reference to the original,
+	// so identity comparisons work across clones.
+	grammarNonterminal?: Nonterminal
 }
 
 export interface Sequence extends GrammarElementBase {
@@ -635,3 +420,12 @@ export interface NonterminalReference extends GrammarElementBase {
 	type: 'NonterminalReference'
 	reference: Function
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Builder type definitions
+/////////////////////////////////////////////////////////////////////////////////////////////////
+export interface GrammarBuilderOptions<T> {
+	unwrappedNonterminalNames?: GrammarNonterminalNames<T>
+}
+
+export type GrammarNonterminalNames<T> = (keyof T)[]

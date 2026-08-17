@@ -11,7 +11,7 @@ export class JsonGrammar {
 		this.arrayExpression
 	)
 
-	stringLiteral = G.pattern([
+	stringLiteral = () => G.pattern([
 		zeroOrMoreWhitespace,
 
 		'"',
@@ -27,7 +27,7 @@ export class JsonGrammar {
 		zeroOrMoreWhitespace,
 	])
 
-	numberLiteral = G.pattern([
+	numberLiteral = () => G.pattern([
 		zeroOrMoreWhitespace,
 
 		R.captureAs('value', [
@@ -46,7 +46,7 @@ export class JsonGrammar {
 		zeroOrMoreWhitespace,
 	])
 
-	booleanLiteral = G.pattern([
+	booleanLiteral = () => G.pattern([
 		zeroOrMoreWhitespace,
 
 		R.captureAs('value',
@@ -56,7 +56,7 @@ export class JsonGrammar {
 		zeroOrMoreWhitespace,
 	])
 
-	nullLiteral = G.pattern([
+	nullLiteral = () => G.pattern([
 		zeroOrMoreWhitespace,
 
 		'null',
@@ -92,14 +92,14 @@ export class JsonGrammar {
 		this.closingSquareBracket
 	]
 
-	openingCurlyBrace = createPatternWithClearedWhitespace('{')
-	closingCurlyBrace = createPatternWithClearedWhitespace('}')
+	openingCurlyBrace = () => createPatternWithClearedWhitespace('{')
+	closingCurlyBrace = () => createPatternWithClearedWhitespace('}')
 
-	openingSquareBracket = createPatternWithClearedWhitespace('[')
-	closingSquareBracket = createPatternWithClearedWhitespace(']')
+	openingSquareBracket = () => createPatternWithClearedWhitespace('[')
+	closingSquareBracket = () => createPatternWithClearedWhitespace(']')
 
-	comma = createPatternWithClearedWhitespace(',')
-	colons = createPatternWithClearedWhitespace(':')
+	comma = () => createPatternWithClearedWhitespace(',')
+	colons = () => createPatternWithClearedWhitespace(':')
 }
 
 function createPatternWithClearedWhitespace(subpattern: R.Pattern) {
@@ -113,3 +113,21 @@ function createPatternWithClearedWhitespace(subpattern: R.Pattern) {
 }
 
 const zeroOrMoreWhitespace = R.zeroOrMore(R.whitespace)
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Wrapped nonterminal names
+//////////////////////////////////////////////////////////////////////////////////////////////
+export const jsonGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<JsonGrammar> = [
+	//'stringLiteral',
+	//'numberLiteral',
+	//'booleanLiteral',
+	//'nullLiteral',
+
+	'openingCurlyBrace',
+	'closingCurlyBrace',
+	'openingSquareBracket',
+	'closingSquareBracket',
+
+	'comma',
+	'colons',
+]

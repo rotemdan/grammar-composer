@@ -3,9 +3,9 @@
 A library to define, build and efficiently parse context-free grammars.
 
 * Grammars are defined using TypeScript class declarations
-* No tokenization stage. The generated parser accepts raw characters as input, meaning it's a form of lexer-free, or hybrid parser, supporting contextual tokenization - that is, low-level character patterns can be specialized to different high-level parser contexts, and sub-patterns captured in the low-level regular expressions are directly embedded as part of the resulting parse tree
-* Raw character parsing is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library. This means that any subset of the grammar that can be stated as a regular expression can be moved to be parsed using the highly optimized native JavaScript RegExp engine, instead of being parsed via the slower context-free parser
-* Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions
+* No tokenization stage. The generated parser accepts raw characters as input, meaning it's a form of lexer-free, hybrid parser, supporting contextual low-level parsing. This means low-level character patterns, recognized by a regular language, can be specialized to various high-level parser contexts, and sub-patterns captured in low-level regular expressions are directly embedded as part of the resulting parse tree
+* Raw character parsing is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library. This means that any subset of the grammar that can be stated as a regular grammar can be moved to be parsed using the highly optimized native JavaScript RegExp engine, instead of being parsed via the slower context-free parser
+* Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions or more specific grammar elements
 * Supports right-recursion, but will currently error when left-recursion is detected
 * Uses sophisticated static analysis to automatically identify and annotate optional productions
 * Provides useful parse-time error reporting, identifying the exact production involved and most likely alternatives at the failed position
@@ -26,12 +26,14 @@ npm install regexp-composer
 The grammar is defined within a container class `XmlGrammar`. It contains a mixture of higher-level, context-free productions and lower-level, regular expression productions.
 
 * Context-free grammar productions are defined by anonymous functions `() => ...`
-* Regular expression productions are defined by `pattern(...)`
+* Regular expression productions are defined by `() => pattern(...)`
+
+(Note: since version `0.5.0` all class members must be productions like `() => ...`, otherwise the grammar would cause a build error)
 
 In this example, context-free operators are prefixed with `G`, and regular expression operators are prefixed with `R`, to avoid confusion between similarly named operators:
 
 ```ts
-import * as G from 'grammar-composer'
+import * as G from '../../exports/Exports.js'
 import * as R from 'regexp-composer'
 
 export class XmlGrammar {
@@ -47,7 +49,7 @@ export class XmlGrammar {
 		)
 	]
 
-	textFragment = G.pattern([
+	textFragment = () => G.pattern([
 		R.oneOrMore(R.notAnyOfChars('<'))
 	])
 
@@ -59,7 +61,7 @@ export class XmlGrammar {
 		this.tagEnd
 	]
 
-	openingTagStart = G.pattern([
+	openingTagStart = () => G.pattern([
 		'<',
 
 		R.possibly('?'),
@@ -71,7 +73,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace),
 	])
 
-	tagEnd = G.pattern([
+	tagEnd = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.possibly(R.anyOf('/', '?')),
@@ -79,7 +81,7 @@ export class XmlGrammar {
 		'>'
 	])
 
-	attribute = G.pattern([
+	attribute = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.captureAs('attributeName',
@@ -99,7 +101,7 @@ export class XmlGrammar {
 		])
 	])
 
-	closingTag = G.pattern([
+	closingTag = () => G.pattern([
 		'</',
 
 		R.zeroOrMore(R.whitespace),
@@ -121,7 +123,7 @@ export class XmlGrammar {
 		this.tagEnd
 	]
 
-	declarationTagOpening = G.pattern([
+	declarationTagOpening = () => G.pattern([
 		'<!',
 
 		R.captureAs('tagName',
@@ -131,7 +133,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace)
 	])
 
-	declarationTagAttribute = G.pattern([
+	declarationTagAttribute = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.anyOf(
@@ -145,7 +147,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace),
 	])
 
-	comment = G.pattern([
+	comment = () => G.pattern([
 		'<!--',
 
 		R.captureAs('commentBody',
@@ -156,6 +158,9 @@ export class XmlGrammar {
 	])
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Helper regular expressions
+//////////////////////////////////////////////////////////////////////////////////////////////
 const quotedString = R.anyOf(
 	[
 		'"',
@@ -172,12 +177,22 @@ const quotedString = R.anyOf(
 		"'"
 	],
 )
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Wrapped nonterminal names
+//////////////////////////////////////////////////////////////////////////////////////////////
+export const xmlGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
+	'openingTagStart',
+	'tagEnd',
+	'declarationTagOpening',
+]
 ```
 
 ### Building and parsing using the XML grammar
 
 ```ts
 import { buildGrammar } from 'grammar-composer'
+import { XmlGrammar, xmlGrammarUnwrappedNonterminalNames } from './XmlGrammar.js'
 
 	const xmlString = `
 <!DOCTYPE web-app>
@@ -186,17 +201,6 @@ import { buildGrammar } from 'grammar-composer'
     <header>Adobe SVG Viewer</header>
     <item action="Open" id="Open">Open</item>
     <item action="OpenNew" id="OpenNew">Open New</item>
-    <separator/>
-    <item action="ZoomIn" id="ZoomIn">Zoom In</item>
-    <item action="ZoomOut" id="ZoomOut">Zoom Out</item>
-    <separator/>
-    <item action="Quality" id="Quality">Quality</item>
-    <item action="Pause" id="Pause">Pause</item>
-    <item action="Mute" id="Mute">Mute</item>
-    <separator/>
-    <item action="Find" id="Find">Find...</item>
-    <item action="FindAgain" id="FindAgain">Find Again</item>
-    <item action="Copy" id="Copy">Copy</item>
 </menu>
 `
 
@@ -204,7 +208,13 @@ import { buildGrammar } from 'grammar-composer'
 //
 // Although `XmlGrammar` is defined as a class, there's no need to instantiate it,
 // just pass it as it is.
-const grammar = buildGrammar(XmlGrammar, 'document')
+const grammar = buildGrammar(RegExpGrammar, 'root', {
+    // This list contains the names of Nonterminals that would be
+    // "passed through" when the parse tree is built,
+    // meaning they would not appear in the parse tree
+    // and their child nodes would be absorbed into their ancestor nodes.
+    unwrappedNonterminalNames: xmlGrammarUnwrappedNonterminalNames
+})
 
 // Parse the XML string with the built grammar
 const parseTree = grammar.parse(xmlString)
@@ -217,15 +227,8 @@ The resulting parse tree looks like:
     {
         "name": "document",
         "startOffset": 0,
-        "endOffset": 644,
-        "sourceText": "\n<!DOCTYPE web-app>\n\n<menu>\n    <header>Adobe SVG Viewer</header>\n    <it
-em action=\"Open\" id=\"Open\">Open</item>\n    <item action=\"OpenNew\" id=\"OpenNew\">Open New</ite
-m>\n    <separator/>\n    <item action=\"ZoomIn\" id=\"ZoomIn\">Zoom In</item>\n    <item action=\"Zo
-omOut\" id=\"ZoomOut\">Zoom Out</item>\n    <separator/>\n    <item action=\"Quality\" id=\"Quality\"
->Quality</item>\n    <item action=\"Pause\" id=\"Pause\">Pause</item>\n    <item action=\"Mute\" id=\
-"Mute\">Mute</item>\n    <separator/>\n    <item action=\"Find\" id=\"Find\">Find...</item>\n    <ite
-m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Copy\" id=\"Copy\">Copy
-</item>\n</menu>\n\n",
+        "endOffset": 177,
+        "sourceText": "\n<!DOCTYPE web-app>\n\n<menu>\n    <header>Adobe SVG Viewer</header>\n    <item action=\"Open\" id=\"Open\">Open</item>\n    <item action=\"OpenNew\" id=\"OpenNew\">Open New</item>\n</menu>\n\n",
         "children": [
             {
                 "name": "textFragment",
@@ -241,18 +244,10 @@ m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Co
                 "sourceText": "<!DOCTYPE web-app>",
                 "children": [
                     {
-                        "name": "declarationTagOpening",
-                        "startOffset": 1,
-                        "endOffset": 11,
-                        "sourceText": "<!DOCTYPE ",
-                        "children": [
-                            {
-                                "name": "tagName",
-                                "startOffset": 3,
-                                "endOffset": 10,
-                                "sourceText": "DOCTYPE"
-                            }
-                        ]
+                        "name": "tagName",
+                        "startOffset": 3,
+                        "endOffset": 10,
+                        "sourceText": "DOCTYPE"
                     },
                     {
                         "name": "declarationTagAttribute",
@@ -267,13 +262,6 @@ m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Co
                                 "sourceText": "web-app"
                             }
                         ]
-                    },
-                    {
-                        "name": "tagEnd",
-                        "startOffset": 18,
-                        "endOffset": 19,
-                        "sourceText": ">",
-                        "children": []
                     }
                 ]
             },
@@ -291,25 +279,10 @@ m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Co
                 "sourceText": "<menu>",
                 "children": [
                     {
-                        "name": "openingTagStart",
-                        "startOffset": 21,
+                        "name": "tagName",
+                        "startOffset": 22,
                         "endOffset": 26,
-                        "sourceText": "<menu",
-                        "children": [
-                            {
-                                "name": "tagName",
-                                "startOffset": 22,
-                                "endOffset": 26,
-                                "sourceText": "menu"
-                            }
-                        ]
-                    },
-                    {
-                        "name": "tagEnd",
-                        "startOffset": 26,
-                        "endOffset": 27,
-                        "sourceText": ">",
-                        "children": []
+                        "sourceText": "menu"
                     }
                 ]
             },
@@ -327,29 +300,116 @@ m action=\"FindAgain\" id=\"FindAgain\">Find Again</item>\n    <item action=\"Co
                 "sourceText": "<header>",
                 "children": [
                     {
-                        "name": "openingTagStart",
-                        "startOffset": 32,
+                        "name": "tagName",
+                        "startOffset": 33,
                         "endOffset": 39,
-                        "sourceText": "<header",
+                        "sourceText": "header"
+                    }
+                ]
+            },
+            {
+                "name": "textFragment",
+                "startOffset": 40,
+                "endOffset": 56,
+                "sourceText": "Adobe SVG Viewer",
+                "children": []
+            },
+            {
+                "name": "closingTag",
+                "startOffset": 56,
+                "endOffset": 65,
+                "sourceText": "</header>",
+                "children": [
+                    {
+                        "name": "tagName",
+                        "startOffset": 58,
+                        "endOffset": 64,
+                        "sourceText": "header"
+                    }
+                ]
+            },
+            {
+                "name": "textFragment",
+                "startOffset": 65,
+                "endOffset": 70,
+                "sourceText": "\n    ",
+                "children": []
+            },
+            {
+                "name": "openingTag",
+                "startOffset": 70,
+                "endOffset": 100,
+                "sourceText": "<item action=\"Open\" id=\"Open\">",
+                "children": [
+                    {
+                        "name": "tagName",
+                        "startOffset": 71,
+                        "endOffset": 75,
+                        "sourceText": "item"
+                    },
+                    {
+                        "name": "attribute",
+                        "startOffset": 76,
+                        "endOffset": 90,
+                        "sourceText": "action=\"Open\" ",
                         "children": [
                             {
-                                "name": "tagName",
-                                "startOffset": 33,
-                                "endOffset": 39,
-                                "sourceText": "header"
+                                "name": "attributeName",
+                                "startOffset": 76,
+                                "endOffset": 82,
+                                "sourceText": "action"
+                            },
+                            {
+                                "name": "doubleQuotedStringContent",
+                                "startOffset": 84,
+                                "endOffset": 88,
+                                "sourceText": "Open"
                             }
                         ]
                     },
                     {
-                        "name": "tagEnd",
-                        "startOffset": 39,
-                        "endOffset": 40,
-                        "sourceText": ">",
-                        "children": []
+                        "name": "attribute",
+                        "startOffset": 90,
+                        "endOffset": 99,
+                        "sourceText": "id=\"Open\"",
+                        "children": [
+                            {
+                                "name": "attributeName",
+                                "startOffset": 90,
+                                "endOffset": 92,
+                                "sourceText": "id"
+                            },
+                            {
+                                "name": "doubleQuotedStringContent",
+                                "startOffset": 94,
+                                "endOffset": 98,
+                                "sourceText": "Open"
+                            }
+                        ]
                     }
                 ]
             },
-
+            {
+                "name": "textFragment",
+                "startOffset": 100,
+                "endOffset": 104,
+                "sourceText": "Open",
+                "children": []
+            },
+            {
+                "name": "closingTag",
+                "startOffset": 104,
+                "endOffset": 111,
+                "sourceText": "</item>",
+                "children": [
+                    {
+                        "name": "tagName",
+                        "startOffset": 106,
+                        "endOffset": 110,
+                        "sourceText": "item"
+                    }
+                ]
+            },
 ...
 ```
 
@@ -388,11 +448,6 @@ Store the result of parsing using this grammar element and reuse when it's subse
 ### `uncached(grammarElement)`
 
 Don't cache this grammar element.
-
-## Future
-
-* Allow raw regular expressions as part of the grammar
-* Allow to include user-provided parser functions
 
 ## License
 

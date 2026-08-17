@@ -1,9 +1,9 @@
 import { Timer } from '../utilities/Timer.js'
 import { jsonSample1, jsonSample2 } from './test-data/TestData.js'
 import { anyOf, buildGrammar } from '../exports/Exports.js'
-import { JsonGrammar } from './test-grammars/JsonGrammar.js'
-import { XmlGrammar } from './test-grammars/XmlGrammar.js'
-import { RegExpGrammar } from './test-grammars/RegExpGrammar.js'
+import { JsonGrammar, jsonGrammarUnwrappedNonterminalNames } from './test-grammars/JsonGrammar.js'
+import { XmlGrammar, xmlGrammarUnwrappedNonterminalNames } from './test-grammars/XmlGrammar.js'
+import { RegExpGrammar, regExpGrammarUnwrappedNonterminalNames } from './test-grammars/RegExpGrammar.js'
 import { writeFile } from 'fs/promises'
 import { SimpleTestGrammar1 } from './test-grammars/SimpleTestGrammar1.js'
 
@@ -30,7 +30,9 @@ function testBasic() {
 function testJsonParser() {
 	const jsonString = jsonSample1
 
-	const grammar = buildGrammar(JsonGrammar, 'expression')
+	const grammar = buildGrammar(JsonGrammar, 'expression', {
+		unwrappedNonterminalNames: jsonGrammarUnwrappedNonterminalNames
+	})
 
 	const iterations = 1000
 
@@ -52,7 +54,7 @@ function testJsonParser() {
 	log(JSON.stringify(result1, undefined, 4))
 }
 
-function testXmlParser() {
+async function testXmlParser() {
 	const xmlString = `
 <!DOCTYPE web-app>
 
@@ -60,36 +62,33 @@ function testXmlParser() {
     <header>Adobe SVG Viewer</header>
     <item action="Open" id="Open">Open</item>
     <item action="OpenNew" id="OpenNew">Open New</item>
-    <separator/>
-    <item action="ZoomIn" id="ZoomIn">Zoom In</item>
-    <item action="ZoomOut" id="ZoomOut">Zoom Out</item>
-    <separator/>
-    <item action="Quality" id="Quality">Quality</item>
-    <item action="Pause" id="Pause">Pause</item>
-    <item action="Mute" id="Mute">Mute</item>
-    <separator/>
-    <item action="Find" id="Find">Find...</item>
-    <item action="FindAgain" id="FindAgain">Find Again</item>
-    <item action="Copy" id="Copy">Copy</item>
 </menu>
-
 `
 	// Build the grammar. 'document' is the starting production
-	const grammar = buildGrammar(XmlGrammar, 'document')
+	const grammar = buildGrammar(XmlGrammar, 'document', {
+		unwrappedNonterminalNames: xmlGrammarUnwrappedNonterminalNames
+	})
 
 	// Parse the XML string
 	const parseTree = grammar.parse(xmlString)
 
-	log(JSON.stringify(parseTree, undefined, 4))
+	const parseTreeJson = JSON.stringify(parseTree, undefined, 4)
+
+	log(parseTreeJson)
+
+	await writeFile('out/out.json', parseTreeJson)
 }
 
 async function testRegExpParser() {
-	const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
+	//const regExpString = /^([+]?[1]?(1 )?[-.+]?\(?\d{1}[- .+]*\d{1}[- .+]*\d{1}\)?[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1}[- .+]*\d{1})$/.source
 	//const regExpString = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.source
 	//const regExpString = /(?=.*[!@#$%^&*])^mongodb:\/\/(?<user>[a-zA-Z0-9]+):(?<pass>[a-zA-Z0-9!@#$%^&*]{8,})@(?<host>[a-z0-9.-]+):(?<port>\d{2,5})$/.source
-	//const regExpString = /(abcd)*ef+g/.source
+	const regExpString = /^(abcd)*ef+g/.source
+	//const regExpString = '(abcd)(aa))'
 
-	const grammar = buildGrammar(RegExpGrammar, 'root')
+	const grammar = buildGrammar(RegExpGrammar, 'root', {
+		unwrappedNonterminalNames: regExpGrammarUnwrappedNonterminalNames
+	})
 
 	const parseTree = grammar.parse(regExpString)
 
@@ -131,8 +130,11 @@ function test1() {
 }
 
 
-//testJsonParser()
+//testParserError1()
+//testParserError2()
 
-testRegExpParser()
+//testJsonParser()
+testXmlParser()
+//testRegExpParser()
 
 //test1()

@@ -1,19 +1,35 @@
 import { isNumber } from '../utilities/Utilities.js'
-import { Grammar, GrammarElement, Terminal } from './Grammar.js'
+import { Grammar, GrammarElement, Terminal, type Nonterminal } from './Grammar.js'
+import { type FailedMatch, ParseError } from './ParseError.js'
 
-export function parse(inputString: string, grammar: Grammar<any>) {
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Main parser function
+//////////////////////////////////////////////////////////////////////////////////////////////
+export function parse(inputString: string, grammar: Grammar<any>, options?: TopDownParserOptions) {
+	options = { ...options }
+
 	const inputLength = inputString.length
 
-	let bestFailedMatches: Terminal[] = []
+	const nonterminalStack: Nonterminal[] = []
+
+	let bestFailedMatches: FailedMatch[] = []
 	let bestFailedMatchesOffset = -1
+
+	const cacheKeyOffsetMultiplier = grammar.maxCacheId + 1
+	const parseResultsCache = new Map<number, ParseResult | null>()
 
 	function updateBestFailedMatchesIfNeeded(terminal: Terminal, startOffset: number) {
 		if (startOffset >= bestFailedMatchesOffset) {
+			const failedMatch: FailedMatch = {
+				terminal,
+				productionStack: [...nonterminalStack]
+			}
+
 			if (startOffset > bestFailedMatchesOffset) {
 				bestFailedMatchesOffset = startOffset
-				bestFailedMatches = [terminal]
+				bestFailedMatches = [failedMatch]
 			} else {
-				bestFailedMatches.push(terminal)
+				bestFailedMatches.push(failedMatch)
 			}
 		}
 	}
@@ -26,13 +42,9 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 		}
 	}
 
-	const offsetMultiplier = grammar.maxCacheId + 1
-
-	const parseResultsCache = new Map<number, ParseResult | null>()
-
 	function tryParseCached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
 		const cacheId = grammarElement.cacheId!
-		const cacheKey = (startOffset * offsetMultiplier) + cacheId
+		const cacheKey = (startOffset * cacheKeyOffsetMultiplier) + cacheId
 
 		if (parseResultsCache.has(cacheKey)) {
 			return parseResultsCache.get(cacheKey)!
@@ -94,10 +106,6 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 
 					if (groupsIndices.groups) {
 						namedGroupIndicesIdentifiers = Object.keys(groupsIndices.groups)
-
-						if (namedGroupIndicesIdentifiers.length !== groupsIndices.length - 1) {
-							throw new Error(`The regular expression /${grammarElement.regExp.source}/ contains a combination of named and unnamed groups. Due to limitations of the JavaScript RegExp engine, it is impossible to reliably identify the ordering of this combination, please use either all unnamed or named groups, but not both.`)
-						}
 					}
 
 					const children: ParseTreeNode[] = []
@@ -133,26 +141,44 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 			}
 
 			case 'Nonterminal': {
+				nonterminalStack.push(grammarElement)
+
 				const result = tryParse(grammarElement.content, startOffset)
+
+				nonterminalStack.pop()
 
 				if (result === null) {
 					return null
 				}
 
-				let newNode: ParseTreeNode = {
-					name: grammarElement.name,
-					startOffset,
-					endOffset: result.endOffset,
-					sourceText: inputString.substring(startOffset, result.endOffset),
-					children: result.nodes,
-				}
+				const grammarElementName = grammarElement.name
 
-				const newResult: ParseResult = {
-					endOffset: result.endOffset,
-					nodes: [newNode]
-				}
+				if (grammarElement.unwrapped) {
+					const newResult: ParseResult = {
+						endOffset: result.endOffset,
+						nodes: result.nodes
+					}
 
-				return newResult
+					return newResult
+				} else {
+					const newNode: ParseTreeNode = {
+						name: grammarElementName,
+
+						startOffset,
+						endOffset: result.endOffset,
+
+						sourceText: inputString.substring(startOffset, result.endOffset),
+
+						children: result.nodes,
+					}
+
+					const newResult: ParseResult = {
+						endOffset: result.endOffset,
+						nodes: [newNode]
+					}
+
+					return newResult
+				}
 			}
 
 			case 'Sequence': {
@@ -252,36 +278,22 @@ export function parse(inputString: string, grammar: Grammar<any>) {
 	if (result && result.endOffset >= inputLength) {
 		return result.nodes ?? []
 	} else {
+		const failureOffset = bestFailedMatches.length > 0 ? bestFailedMatchesOffset : (result?.endOffset ?? 0)
+
 		if (bestFailedMatches.length > 0) {
-			const possibleMatches = bestFailedMatches.map(match => {
-				if (match.type === 'StringTerminal') {
-					return `'${match.content}'`
-				} else if (match.type === 'PatternTerminal') {
-					return `/${match.regExp.source}/`
-				} else {
-					throw new Error(`Invalid match type: '${(match as any).type}'`)
-				}
-			})
-
-			const possibleMatchesWithoutDuplicates = [...(new Set(possibleMatches))]
-
-			let possibleMatchesString: string
-
-			if (possibleMatchesWithoutDuplicates.length > 1) {
-				possibleMatchesString = `any of ${possibleMatchesWithoutDuplicates.join(', ')}`
-			} else {
-				possibleMatchesString = possibleMatchesWithoutDuplicates[0]
-			}
-
-			throw new Error(`Failed parsing the input text. Expected ${possibleMatchesString} at position ${bestFailedMatchesOffset}.`)
+			throw ParseError.createFailedParseError(inputString, failureOffset, bestFailedMatches)
 		} else {
 			const lastNode = result?.nodes?.[result.nodes.length - 1]
+			const parsedLength = lastNode?.endOffset ?? result?.endOffset ?? 0
 
-			throw new Error(`Failed parsing the input text. Parsed length was ${lastNode?.endOffset ?? result?.endOffset ?? 0}. Input length was ${inputLength}.`)
+			throw ParseError.createIncompleteParseError(inputString, failureOffset, parsedLength)
 		}
 	}
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Types
+//////////////////////////////////////////////////////////////////////////////////////////////
 export interface ParseResult {
 	endOffset: number
 	nodes: ParseTreeNode[] | undefined
@@ -289,8 +301,14 @@ export interface ParseResult {
 
 export interface ParseTreeNode {
 	name: string
+
 	startOffset: number
 	endOffset: number
+
 	sourceText: string
-	children: ParseTreeNode[] | undefined
+
+	children?: ParseTreeNode[]
+}
+
+export interface TopDownParserOptions {
 }

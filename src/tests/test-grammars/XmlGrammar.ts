@@ -14,7 +14,7 @@ export class XmlGrammar {
 		)
 	]
 
-	textFragment = G.pattern([
+	textFragment = () => G.pattern([
 		R.oneOrMore(R.notAnyOfChars('<'))
 	])
 
@@ -26,7 +26,7 @@ export class XmlGrammar {
 		this.tagEnd
 	]
 
-	openingTagStart = G.pattern([
+	openingTagStart = () => G.pattern([
 		'<',
 
 		R.possibly('?'),
@@ -38,7 +38,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace),
 	])
 
-	tagEnd = G.pattern([
+	tagEnd = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.possibly(R.anyOf('/', '?')),
@@ -46,7 +46,7 @@ export class XmlGrammar {
 		'>'
 	])
 
-	attribute = G.pattern([
+	attribute = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.captureAs('attributeName',
@@ -66,7 +66,7 @@ export class XmlGrammar {
 		])
 	])
 
-	closingTag = G.pattern([
+	closingTag = () => G.pattern([
 		'</',
 
 		R.zeroOrMore(R.whitespace),
@@ -88,7 +88,7 @@ export class XmlGrammar {
 		this.tagEnd
 	]
 
-	declarationTagOpening = G.pattern([
+	declarationTagOpening = () => G.pattern([
 		'<!',
 
 		R.captureAs('tagName',
@@ -98,7 +98,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace)
 	])
 
-	declarationTagAttribute = G.pattern([
+	declarationTagAttribute = () => G.pattern([
 		R.zeroOrMore(R.whitespace),
 
 		R.anyOf(
@@ -112,7 +112,7 @@ export class XmlGrammar {
 		R.zeroOrMore(R.whitespace),
 	])
 
-	comment = G.pattern([
+	comment = () => G.pattern([
 		'<!--',
 
 		R.captureAs('commentBody',
@@ -123,6 +123,9 @@ export class XmlGrammar {
 	])
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Helper regular expressions
+//////////////////////////////////////////////////////////////////////////////////////////////
 const quotedString = R.anyOf(
 	[
 		'"',
@@ -139,3 +142,12 @@ const quotedString = R.anyOf(
 		"'"
 	],
 )
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+// Wrapped nonterminal names
+//////////////////////////////////////////////////////////////////////////////////////////////
+export const xmlGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
+	'openingTagStart',
+	'tagEnd',
+	'declarationTagOpening',
+]
