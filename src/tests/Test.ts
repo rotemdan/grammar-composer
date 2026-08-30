@@ -134,7 +134,7 @@ function test1() {
 //testParserError2()
 
 //testJsonParser()
-testXmlParser()
-//testRegExpParser()
+//testXmlParser()
+testRegExpParser()
 
 //test1()

@@ -131,7 +131,7 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 		// If it stays false, it means that no improvement was made during the iteration,
 		// and we should exit the loop.
 		let atLastOneDependencyResolvedInAnyNode = false
-		
+
 		const nodesToDelete: GrammarElement[] = []
 
 		// Scan the unresolved nodes to locate any new resolved dependencies
@@ -189,10 +189,12 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 		}
 	}
 
-	// All remaining unresolved nodes must now be optional,
-	// since they are all mutually cyclic and all their non-cyclic grammar elements are known to be optional.
+	// All remaining unresolved nodes are part of a strongly-connected cyclic
+	// component with no resolvable nullable base case. The least fixed-point
+	// for nullability is `false` (not optional): a cycle without an empty
+	// alternative cannot derive the empty string.
 	for (const node of unresolvedNodes.keys()) {
-		resolvedNodes.set(node, true)
+		resolvedNodes.set(node, false)
 		unresolvedNodes.delete(node)
 	}
 
@@ -210,7 +212,11 @@ export function detectAndErrorOnLeftRecursion(rootNode: GrammarElement) {
 			if (node.type === 'Nonterminal') {
 				throw new Error(`Detected left recursion for nonterminal '${node.name}'.`)
 			} else {
-				throw new Error(`Detected left recursion for node: ${JSON.stringify(node, undefined, 4)}`)
+				try {
+					throw new Error(`Detected left recursion for node: ${JSON.stringify(node, undefined, 4)}`)
+				} catch {
+					throw new Error(`Detected left recursion for node type '${(node as any).type}'.`)
+				}
 			}
 		}
 
@@ -282,7 +288,7 @@ export function validatePatternCaptureGroups(pattern: Pattern): void {
 			case 'capture': {
 				if (node.name !== undefined) {
 					if (seenNamedCaptureGroupNames.has(node.name)) {
-						throw new Error(`The regular expression pattern contains multiple named capture groups with the same name '${node.name}'. Named capture groups must have unique names.`)
+						throw new Error(`The regular expression pattern contains multiple named capture groups with the same name '${(node as any).name}'. Named capture groups must have unique names.`)
 					}
 
 					seenNamedCaptureGroupNames.add(node.name)
@@ -296,7 +302,11 @@ export function validatePatternCaptureGroups(pattern: Pattern): void {
 				return
 			}
 
-			// Composite nodes that wrap content without creating a capturing group:
+			// Composite nodes that wrap content without creating a capturing group.
+			// regexp-composer uses a `greedy` boolean to distinguish `zeroOrMore` vs
+			// `zeroOrMoreNonGreedy` etc, but both share the same `type` string
+			// (`zeroOrMore`, `oneOrMore`, `repeated`). Handle any type that wraps
+			// a single `content` field.
 			case 'possibly':
 			case 'zeroOrMore':
 			case 'oneOrMore':

@@ -1,3 +1,4 @@
-export * from '../parser-generator/Grammar.js'
-export { ParseError } from '../parser-generator/ParseError.js'
-export * from '../parser-generator/TopDownParser.js'
+export * from '../parser/Grammar.js'
+export * from '../parser/Builder.js'
+export { ParseError } from '../parser/ParseError.js'
+export * from '../parser/Parser.js'

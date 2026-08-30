@@ -179,7 +179,7 @@ export class TerminalToText {
 
 export function escapeChar(char: string): string {
 	const charMapping: Record<string, string> = {
-		//'\\': '\\\\',
+		'\\': '\\\\',
 		"'": "\\'",
 		'\n': '\\n',
 		'\r': '\\r',

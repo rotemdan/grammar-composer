@@ -5,7 +5,7 @@ import { type FailedMatch, ParseError } from './ParseError.js'
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Main parser function
 //////////////////////////////////////////////////////////////////////////////////////////////
-export function parse(inputString: string, grammar: Grammar<any>, options?: TopDownParserOptions) {
+export function parse(inputString: string, grammar: Grammar<any>, options?: ParserOptions) {
 	options = { ...options }
 
 	const inputLength = inputString.length
@@ -15,7 +15,7 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 	let bestFailedMatches: FailedMatch[] = []
 	let bestFailedMatchesOffset = -1
 
-	const cacheKeyOffsetMultiplier = grammar.maxCacheId + 1
+	const cacheKeyOffsetMultiplier = grammar.maxCacheId > 0 ? grammar.maxCacheId + 1 : 1
 	const parseResultsCache = new Map<number, ParseResult | null>()
 
 	function updateBestFailedMatchesIfNeeded(terminal: Terminal, startOffset: number) {
@@ -58,6 +58,21 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 	}
 
 	function tryParseUncached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
+		const result = tryParseElement(grammarElement, startOffset)
+
+		if (result === null && grammarElement.optional === true) {
+			// An optional element that doesn't match is "skipped": it succeeds
+			// by consuming no input and producing no nodes. This uniformly
+			// implements the `possibly()` "or skip" semantics wherever the
+			// element appears (sequence members, repetition content, choice
+			// members, or as the content of a production itself).
+			return { endOffset: startOffset, nodes: undefined, skipped: true }
+		}
+
+		return result
+	}
+
+	function tryParseElement(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
 		switch (grammarElement.type) {
 			case 'StringTerminal': {
 				const target = grammarElement.content
@@ -102,16 +117,35 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 				const groupsIndices = matchResults.indices
 
 				if (groupsIndices !== undefined) {
-					let namedGroupIndicesIdentifiers: string[] | undefined = undefined
-
-					if (groupsIndices.groups) {
-						namedGroupIndicesIdentifiers = Object.keys(groupsIndices.groups)
-					}
-
 					const children: ParseTreeNode[] = []
 
-					for (let i = 1; i < groupsIndices.length; i++) {
-						const groupIndices = groupsIndices[i]
+					// Build a reverse lookup from indices entry -> group name by identity.
+					// This is robust even when some groups do not participate (undefined)
+					// and avoids relying on Object.keys order aligning with numeric indices.
+					let indexToName: (string | undefined)[] | undefined = undefined
+
+					if (groupsIndices.groups) {
+						indexToName = new Array(groupsIndices.length)
+
+						for (const [name, range] of Object.entries(groupsIndices.groups)) {
+							if (range === undefined) {
+								continue
+							}
+
+							// `range` is the same array instance as groupsIndices[index]
+							const index = groupsIndices.indexOf(range)
+
+							if (index >= 0) {
+								indexToName[index] = name
+							}
+						}
+
+						// Mark which indices actually correspond to named groups
+						// (validatePatternCaptureGroups guarantees all-or-nothing, but be defensive)
+					}
+
+					for (let i = 1; i < (groupsIndices as unknown as number[][]).length; i++) {
+						const groupIndices = (groupsIndices as unknown as (number[] | undefined)[])[i]
 
 						if (groupIndices === undefined) {
 							continue
@@ -120,8 +154,10 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 						const groupStartOffset = startOffset + groupIndices[0]
 						const groupEndOffset = startOffset + groupIndices[1]
 
+						const name = indexToName?.[i] ?? i.toString()
+
 						children.push({
-							name: namedGroupIndicesIdentifiers ? namedGroupIndicesIdentifiers[i - 1] : i.toString(),
+							name,
 							startOffset: groupStartOffset,
 							endOffset: groupEndOffset,
 							sourceText: inputString.substring(groupStartOffset, groupEndOffset),
@@ -149,6 +185,13 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 
 				if (result === null) {
 					return null
+				}
+
+				if (result.skipped === true) {
+					// The content was skipped (it was optional and didn't match),
+					// so no node should be created for this nonterminal either,
+					// and the skip is propagated to the parent.
+					return { endOffset: startOffset, nodes: undefined, skipped: true }
 				}
 
 				const grammarElementName = grammarElement.name
@@ -297,6 +340,12 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: TopD
 export interface ParseResult {
 	endOffset: number
 	nodes: ParseTreeNode[] | undefined
+
+	// Marks a result produced by an optional element that was "skipped" (it
+	// didn't match, so the parse succeeded by consuming no input and producing
+	// no nodes). Set internally by the parser; a receiving `Nonterminal` uses
+	// it to avoid creating a node for skipped content.
+	skipped?: boolean
 }
 
 export interface ParseTreeNode {
@@ -310,5 +359,5 @@ export interface ParseTreeNode {
 	children?: ParseTreeNode[]
 }
 
-export interface TopDownParserOptions {
+export interface ParserOptions {
 }

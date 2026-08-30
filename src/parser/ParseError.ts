@@ -122,21 +122,24 @@ export function analyzeFailedMatches(failedMatches: FailedMatch[]): FailedMatchA
 // A candidate is redundant when the same terminal is also expected by a deeper
 // production within the same context, i.e. when another candidate's production
 // appears below this candidate's production in its own stack.
+//
+// Compare within the other candidate's own stack: if there exists another
+// candidate `other` such that `candidate` is an ancestor of `other` in
+// `other`'s stack, keep only `other` (innermost).
 function isRedundantCandidate(candidate: TerminalCandidate, candidates: TerminalCandidate[]): boolean {
-	const candidateIndex = stackIndexOf(candidate.productionStack, candidate.production)
-
 	for (const other of candidates) {
 		if (other === candidate) {
 			continue
 		}
 
-		const otherIndex = stackIndexOf(candidate.productionStack, other.production)
+		const candidateIndexInOther = stackIndexOf(other.productionStack, candidate.production)
 
-		if (otherIndex > candidateIndex) {
+		const otherIndexInOther = stackIndexOf(other.productionStack, other.production)
+
+		if (candidateIndexInOther !== -1 && otherIndexInOther !== -1 && otherIndexInOther > candidateIndexInOther) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -148,6 +151,26 @@ function stackIndexOf(productionStack: Nonterminal[], production: Nonterminal): 
 	return productionStack.findIndex(nonterminal => (nonterminal.grammarNonterminal ?? nonterminal) === canonical)
 }
 
+function areTerminalsEqual(a: any, b: any): boolean {
+	if (a === b) {
+		return true
+	}
+
+	if (a?.type !== b?.type) {
+		return false
+	}
+
+	if (a.type === 'StringTerminal') {
+		return a.content === b.content
+	}
+
+	if (a.type === 'PatternTerminal') {
+		return a.regExp.source === b.regExp.source && a.regExp.flags === b.regExp.flags
+	}
+
+	return false
+}
+
 function stringifyFailedTerminal(failedMatch: FailedMatch): string {
 	const { terminal, productionStack } = failedMatch
 
@@ -155,10 +178,18 @@ function stringifyFailedTerminal(failedMatch: FailedMatch): string {
 		return terminal.name
 	}
 
-	const innermostProduction = productionStack[productionStack.length - 1]
+	// Compare terminals by structural identity: PatternTerminals are
+	// reconstructed objects, StringTerminals are cloned, so object
+	// identity vs innermostProduction.content is not reliable.
+	//
+	// Instead check if the failed terminal equals the content of any
+	// production in the stack by value.
+	for (let i = productionStack.length - 1; i >= 0; i--) {
+		const production = productionStack[i]
 
-	if (innermostProduction !== undefined && innermostProduction.content === terminal) {
-		return innermostProduction.name
+		if (areTerminalsEqual(production.content, terminal)) {
+			return production.name
+		}
 	}
 
 	const stringifiedLengthLimit = 100
@@ -176,7 +207,7 @@ function stringifyFailedTerminal(failedMatch: FailedMatch): string {
 // during a single parse: the grammar builder creates spread copies of the canonical
 // nonterminal for optional references and for references wrapped in cached(). Each clone
 // keeps a reference to the original in 'grammarNonterminal'.
-export function findCommonProductionPrefix(productionStacks: Nonterminal[][]): Nonterminal[] {
+function findCommonProductionPrefix(productionStacks: Nonterminal[][]): Nonterminal[] {
 	if (productionStacks.length === 0) {
 		return []
 	}
@@ -251,7 +282,7 @@ function buildExpectedGroupsMessage(expected: readonly ExpectedTerminal[]): stri
 		.join('\n\n')
 }
 
-export function formatErrorContext(input: string, offset: number, maxDisplayedLineLength: number): string {
+function formatErrorContext(input: string, offset: number, maxDisplayedLineLength: number): string {
 	const { line, column } = getLineAndColumn(input, offset)
 
 	let lineStartOffset = offset

@@ -1,13 +1,12 @@
-import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
-import { isArray, isBoolean, isFunction, isString } from '../utilities/Utilities.js'
+import { isArray, isFunction, isString } from '../utilities/Utilities.js'
 
-import { parse } from './TopDownParser.js'
-import { detectAndAnnotateOptionalNodes, detectAndErrorOnLeftRecursion, validatePatternCaptureGroups } from './StaticAnalysis.js'
+import { detectAndAnnotateOptionalNodes, detectAndErrorOnLeftRecursion } from './StaticAnalysis.js'
+import { Grammar, Nonterminal, GrammarElement, StringTerminal, Sequence, NonterminalReference, Production } from './Grammar.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Grammar builder method
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export function buildGrammar<T extends { [key: string]: any }>(
+export function buildGrammar<T extends GrammarDefinition>(
 	definitionObject: T | (new () => T),
 	startProductionName: keyof T,
 	options?: GrammarBuilderOptions<T>): Grammar<T> {
@@ -25,7 +24,7 @@ export function buildGrammar<T extends { [key: string]: any }>(
 	const nonterminalLookup = new Map<Function, Nonterminal>()
 	const optionalNonterminalLookup = new Map<Function, Nonterminal>()
 
-	for (const key in definitionObject) {
+	for (const key of Object.keys(definitionObject)) {
 		const objectProperty = definitionObject[key]
 
 		nameLookup.set(objectProperty, key)
@@ -67,6 +66,12 @@ export function buildGrammar<T extends { [key: string]: any }>(
 		nonterminal.content = preparedContent
 
 		const optionalNonterminal = optionalNonterminalLookup.get(func)!
+
+		// The optional wrapper should share the already-resolved content
+		// object (which now contains only resolved Nonterminal refs, no
+		// NonterminalReferences left). Sharing is safe because optional
+		// detection works on canonical identity and nodes are mutated
+		// only via the `optional` flag on the wrapper itself.
 		optionalNonterminal.content = preparedContent
 	}
 
@@ -171,94 +176,6 @@ function prepareGrammarElement(
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Exported AST builder functions
-/////////////////////////////////////////////////////////////////////////////////////////////////
-export function zeroOrMore(content: Production): Repetition {
-	return {
-		type: 'Repetition',
-		content: productionToGrammarElement(content),
-		optional: true,
-		cached: false,
-	}
-}
-
-export function oneOrMore(content: Production): Repetition {
-	return {
-		type: 'Repetition',
-		content: productionToGrammarElement(content),
-		optional: false,
-		cached: false,
-	}
-}
-
-export function anyOf(...members: Production[]): Choice {
-	if (members.length === 0) {
-		throw new Error(`'anyOf' requires at least one member.`)
-	}
-
-	const normalizedMembers = members.map(member => productionToGrammarElement(member))
-
-	return {
-		type: 'Choice',
-		members: normalizedMembers,
-		optional: false,
-		exhaustive: false,
-		cached: false,
-	}
-}
-
-export function bestOf(...members: Production[]): Choice {
-	if (members.length === 0) {
-		throw new Error(`'bestOf' requires at least one member.`)
-	}
-
-	const normalizedMembers = members.map(member => productionToGrammarElement(member))
-
-	return {
-		type: 'Choice',
-		members: normalizedMembers,
-		optional: false,
-		exhaustive: true,
-
-		cached: false,
-	}
-}
-
-export function possibly<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), optional: true } as T
-}
-
-export function pattern(pattern: Pattern): PatternTerminal {
-	if (isArray(pattern)) {
-		pattern = [inputStart, ...pattern]
-	} else {
-		pattern = [inputStart, pattern]
-	}
-
-	validatePatternCaptureGroups(pattern)
-
-	const regExp = buildRegExp(pattern)
-	const optional = isPatternOptional(pattern)
-
-	return {
-		type: 'PatternTerminal',
-		pattern,
-		regExp,
-		optional,
-
-		cached: false,
-	}
-}
-
-export function cached<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), cached: true } as T
-}
-
-export function uncached<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), cached: false } as T
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
 // Internal AST builder methods
 /////////////////////////////////////////////////////////////////////////////////////////////////
 function stringTerminal(content: string): StringTerminal {
@@ -311,7 +228,7 @@ function unresolvedReference(reference: Function): NonterminalReference {
 	}
 }
 
-function productionToGrammarElement(production: Production): GrammarElement {
+export function productionToGrammarElement(production: Production): GrammarElement {
 	if (isString(production)) {
 		return stringTerminal(production)
 	} else if (isArray(production)) {
@@ -326,102 +243,6 @@ function productionToGrammarElement(production: Production): GrammarElement {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// Grammar class
-/////////////////////////////////////////////////////////////////////////////////////////////////
-export class Grammar<T> {
-	readonly productions: Record<keyof T, any>
-	readonly startProductionName: keyof T
-
-	readonly maxCacheId: number
-
-	constructor(productions: Record<keyof T, any>, startProductionName: keyof T, maxCacheId: number) {
-		this.startProductionName = startProductionName
-		this.productions = productions
-		this.maxCacheId = maxCacheId
-	}
-
-	parse(text: string) {
-		return parse(text, this)
-	}
-
-	get rootElement() {
-		return (this.productions as any)[this.startProductionName]
-	}
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-// Type definitions
-/////////////////////////////////////////////////////////////////////////////////////////////////
-export type Production = string | GrammarElement | (() => Production) | Production[]
-
-export type GrammarElement =
-	StringTerminal |
-	PatternTerminal |
-	Nonterminal |
-	Sequence |
-	Repetition |
-	Choice |
-	NonterminalReference
-
-interface GrammarElementBase {
-	type: string
-	optional: boolean
-
-	cached: boolean
-	cacheId?: number
-
-	// The name of the grammar property this element was assigned to, if any.
-	// Used by the parser to refer to the element by name in error messages.
-	name?: string
-}
-
-export type Terminal = StringTerminal | PatternTerminal
-
-export interface StringTerminal extends GrammarElementBase {
-	type: 'StringTerminal'
-	content: string
-}
-
-export interface PatternTerminal extends GrammarElementBase {
-	type: 'PatternTerminal'
-	pattern: Pattern
-	regExp: RegExp
-}
-
-export interface Nonterminal extends GrammarElementBase {
-	type: 'Nonterminal'
-	name: string
-	content: GrammarElement
-	unwrapped: boolean
-
-	// The canonical nonterminal as defined in the grammar. Clones created for
-	// optional references and cached references keep a reference to the original,
-	// so identity comparisons work across clones.
-	grammarNonterminal?: Nonterminal
-}
-
-export interface Sequence extends GrammarElementBase {
-	type: 'Sequence'
-	members: GrammarElement[]
-}
-
-export interface Repetition extends GrammarElementBase {
-	type: 'Repetition'
-	content: GrammarElement
-}
-
-export interface Choice extends GrammarElementBase {
-	type: 'Choice'
-	members: GrammarElement[]
-	exhaustive: boolean
-}
-
-export interface NonterminalReference extends GrammarElementBase {
-	type: 'NonterminalReference'
-	reference: Function
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
 // Builder type definitions
 /////////////////////////////////////////////////////////////////////////////////////////////////
 export interface GrammarBuilderOptions<T> {
@@ -429,3 +250,5 @@ export interface GrammarBuilderOptions<T> {
 }
 
 export type GrammarNonterminalNames<T> = (keyof T)[]
+
+export type GrammarDefinition = { [key: string]: any }
