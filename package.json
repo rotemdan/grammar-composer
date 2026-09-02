@@ -1,6 +1,6 @@
 {
 	"name": "grammar-composer",
-	"version": "0.6.2",
+	"version": "0.7.0",
 	"description": "Creates and generates parsers from composable grammar definitions. Includes advanced features like lexer-free parsing, selective packrat memoization and static analysis.",
 	"author": "Rotem Dan",
 	"license": "MIT",
@@ -36,7 +36,7 @@
 		"regexp-composer": "~0.6.1"
 	},
 	"devDependencies": {
-		"@types/node": "~26.4.0",
+		"@types/node": "~26.4.1",
 		"vitest": "~4.1.11"
 	}
 }
