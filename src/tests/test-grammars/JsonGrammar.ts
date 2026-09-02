@@ -115,9 +115,9 @@ function createPatternWithClearedWhitespace(subpattern: R.Pattern) {
 const zeroOrMoreWhitespace = R.zeroOrMore(R.whitespace)
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// Wrapped nonterminal names
+// Unfolded nonterminal list
 //////////////////////////////////////////////////////////////////////////////////////////////
-export const jsonGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<JsonGrammar> = [
+export const jsonGrammarUnfoldedNonterminalNames: G.GrammarNonterminalNames<JsonGrammar> = [
 	//'stringLiteral',
 	//'numberLiteral',
 	//'booleanLiteral',

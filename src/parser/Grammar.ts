@@ -3,7 +3,7 @@ import { isArray } from '../utilities/Utilities.js'
 
 import { parse } from './Parser.js'
 import { validatePatternCaptureGroups } from './StaticAnalysis.js'
-import { productionToGrammarElement } from './Builder.js'
+import { grammarExpressionToNode } from './Builder.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Grammar class
@@ -28,7 +28,7 @@ export class Grammar<T> {
 		return parse(text, this)
 	}
 
-	get rootElement() {
+	get rootNode() {
 		return this.productions[this.startProductionName]
 	}
 }
@@ -36,50 +36,50 @@ export class Grammar<T> {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Exported grammar builder functions
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export function zeroOrMore(content: Production): Repetition {
+export function zeroOrMore(content: GrammarExpression): Repetition {
 	return {
 		type: 'Repetition',
-		content: productionToGrammarElement(content),
+		content: grammarExpressionToNode(content),
 		optional: true,
 		cached: false,
 	}
 }
 
-export function oneOrMore(content: Production): Repetition {
+export function oneOrMore(content: GrammarExpression): Repetition {
 	return {
 		type: 'Repetition',
-		content: productionToGrammarElement(content),
+		content: grammarExpressionToNode(content),
 		optional: false,
 		cached: false,
 	}
 }
 
-export function anyOf(...members: Production[]): Choice {
+export function anyOf(...members: GrammarExpression[]): Choice {
 	if (members.length === 0) {
 		throw new Error(`'anyOf' requires at least one member.`)
 	}
 
-	const normalizedMembers = members.map(member => productionToGrammarElement(member))
+	const memberNodes = members.map(member => grammarExpressionToNode(member))
 
 	return {
 		type: 'Choice',
-		members: normalizedMembers,
+		members: memberNodes,
 		optional: false,
 		exhaustive: false,
 		cached: false,
 	}
 }
 
-export function bestOf(...members: Production[]): Choice {
+export function bestOf(...members: GrammarExpression[]): Choice {
 	if (members.length === 0) {
 		throw new Error(`'bestOf' requires at least one member.`)
 	}
 
-	const normalizedMembers = members.map(member => productionToGrammarElement(member))
+	const memberNodes = members.map(member => grammarExpressionToNode(member))
 
 	return {
 		type: 'Choice',
-		members: normalizedMembers,
+		members: memberNodes,
 		optional: false,
 		exhaustive: true,
 
@@ -87,8 +87,8 @@ export function bestOf(...members: Production[]): Choice {
 	}
 }
 
-export function possibly<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), optional: true } as T
+export function possibly<T extends GrammarExpression>(content: GrammarExpression): T {
+	return { ...grammarExpressionToNode(content), optional: true } as T
 }
 
 export function pattern(pattern: Pattern): PatternTerminal {
@@ -113,20 +113,20 @@ export function pattern(pattern: Pattern): PatternTerminal {
 	}
 }
 
-export function cached<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), cached: true } as T
+export function cached<T extends GrammarExpression>(content: GrammarExpression): T {
+	return { ...grammarExpressionToNode(content), cached: true } as T
 }
 
-export function uncached<T extends Production>(content: Production): T {
-	return { ...productionToGrammarElement(content), cached: false } as T
+export function uncached<T extends GrammarExpression>(content: GrammarExpression): T {
+	return { ...grammarExpressionToNode(content), cached: false } as T
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Type definitions
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export type Production = string | GrammarElement | (() => Production) | Production[]
+export type GrammarExpression = string | GrammarNode | (() => GrammarExpression) | GrammarExpression[]
 
-export type GrammarElement =
+export type GrammarNode =
 	StringTerminal |
 	PatternTerminal |
 	Nonterminal |
@@ -135,60 +135,60 @@ export type GrammarElement =
 	Choice |
 	NonterminalReference
 
-interface GrammarElementBase {
+interface GrammarNodeBase {
 	type: string
 	optional: boolean
 
 	cached: boolean
 	cacheId?: number
 
-	// The name of the grammar property this element was assigned to, if any.
-	// Used by the parser to refer to the element by name in error messages.
+	// The name of the grammar property this node was assigned to, if any.
+	// Used by the parser to refer to the node by name in error messages.
 	name?: string
 }
 
 export type Terminal = StringTerminal | PatternTerminal
 
-export interface StringTerminal extends GrammarElementBase {
+export interface StringTerminal extends GrammarNodeBase {
 	type: 'StringTerminal'
 	content: string
 }
 
-export interface PatternTerminal extends GrammarElementBase {
+export interface PatternTerminal extends GrammarNodeBase {
 	type: 'PatternTerminal'
 	pattern: Pattern
 	regExp: RegExp
 }
 
-export interface Nonterminal extends GrammarElementBase {
+export interface Nonterminal extends GrammarNodeBase {
 	type: 'Nonterminal'
 	name: string
-	content: GrammarElement
-	unwrapped: boolean
+	content: GrammarNode
+	unfolded: boolean
 
 	// The canonical nonterminal as defined in the grammar. Clones created for
 	// optional references and cached references keep a reference to the original,
 	// so identity comparisons work across clones.
-	grammarNonterminal?: Nonterminal
+	canonicalNonterminal?: Nonterminal
 }
 
-export interface Sequence extends GrammarElementBase {
+export interface Sequence extends GrammarNodeBase {
 	type: 'Sequence'
-	members: GrammarElement[]
+	members: GrammarNode[]
 }
 
-export interface Repetition extends GrammarElementBase {
+export interface Repetition extends GrammarNodeBase {
 	type: 'Repetition'
-	content: GrammarElement
+	content: GrammarNode
 }
 
-export interface Choice extends GrammarElementBase {
+export interface Choice extends GrammarNodeBase {
 	type: 'Choice'
-	members: GrammarElement[]
+	members: GrammarNode[]
 	exhaustive: boolean
 }
 
-export interface NonterminalReference extends GrammarElementBase {
+export interface NonterminalReference extends GrammarNodeBase {
 	type: 'NonterminalReference'
 	reference: Function
 }

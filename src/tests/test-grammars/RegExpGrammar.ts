@@ -394,9 +394,9 @@ const escapedChars = {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// Wrapped nonterminal names
+// Unfolded nonterminal list
 //////////////////////////////////////////////////////////////////////////////////////////////
-export const regExpGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<RegExpGrammar> = [
+export const regExpGrammarUnfoldedNonterminalNames: G.GrammarNonterminalNames<RegExpGrammar> = [
 	'disjunctionOrSequence',
 	'group',
 	'backReference',

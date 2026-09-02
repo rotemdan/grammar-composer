@@ -1,6 +1,6 @@
 import type { Nonterminal, Terminal } from './Grammar.js'
 import { buildCaretSpacing, expandTabs, getLineAndColumn } from '../utilities/LineAndColumn.js'
-import { escapeChar, TerminalToText } from './TerminalToText.js'
+import { escapeChar, TerminalFormatter } from './TerminalFormatter.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Parse error class
@@ -145,10 +145,10 @@ function isRedundantCandidate(candidate: TerminalCandidate, candidates: Terminal
 
 // Compares nonterminals by their canonical grammar reference, because the same
 // production can be represented by multiple cloned instances during a parse.
-function stackIndexOf(productionStack: Nonterminal[], production: Nonterminal): number {
-	const canonical = production.grammarNonterminal ?? production
+function stackIndexOf(productionStack: Nonterminal[], nonterminal: Nonterminal): number {
+	const canonicalNonterminal = nonterminal.canonicalNonterminal ?? nonterminal
 
-	return productionStack.findIndex(nonterminal => (nonterminal.grammarNonterminal ?? nonterminal) === canonical)
+	return productionStack.findIndex(nonterminal => (nonterminal.canonicalNonterminal ?? nonterminal) === canonicalNonterminal)
 }
 
 function areTerminalsEqual(a: any, b: any): boolean {
@@ -193,7 +193,7 @@ function stringifyFailedTerminal(failedMatch: FailedMatch): string {
 	}
 
 	const stringifiedLengthLimit = 100
-	const terminalToText = new TerminalToText(stringifiedLengthLimit)
+	const terminalToText = new TerminalFormatter(stringifiedLengthLimit)
 
 	return terminalToText.stringifyTerminal(terminal)
 }
@@ -236,7 +236,7 @@ function findCommonProductionPrefix(productionStacks: Nonterminal[][]): Nontermi
 }
 
 function areSameNonterminal(a: Nonterminal, b: Nonterminal): boolean {
-	return (a.grammarNonterminal ?? a) === (b.grammarNonterminal ?? b)
+	return (a.canonicalNonterminal ?? a) === (b.canonicalNonterminal ?? b)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

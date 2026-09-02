@@ -1,9 +1,9 @@
 import { Timer } from '../utilities/Timer.js'
 import { jsonSample1, jsonSample2 } from './test-data/TestData.js'
 import { anyOf, buildGrammar } from '../exports/Exports.js'
-import { JsonGrammar, jsonGrammarUnwrappedNonterminalNames } from './test-grammars/JsonGrammar.js'
-import { XmlGrammar, xmlGrammarUnwrappedNonterminalNames } from './test-grammars/XmlGrammar.js'
-import { RegExpGrammar, regExpGrammarUnwrappedNonterminalNames } from './test-grammars/RegExpGrammar.js'
+import { JsonGrammar, jsonGrammarUnfoldedNonterminalNames } from './test-grammars/JsonGrammar.js'
+import { XmlGrammar, xmlGrammarUnfoldedNonterminalNames } from './test-grammars/XmlGrammar.js'
+import { RegExpGrammar, regExpGrammarUnfoldedNonterminalNames } from './test-grammars/RegExpGrammar.js'
 import { writeFile } from 'fs/promises'
 import { SimpleTestGrammar1 } from './test-grammars/SimpleTestGrammar1.js'
 
@@ -31,7 +31,7 @@ function testJsonParser() {
 	const jsonString = jsonSample1
 
 	const grammar = buildGrammar(JsonGrammar, 'expression', {
-		unwrappedNonterminalNames: jsonGrammarUnwrappedNonterminalNames
+		unfoldedNonterminalNames: jsonGrammarUnfoldedNonterminalNames
 	})
 
 	const iterations = 1000
@@ -66,7 +66,7 @@ async function testXmlParser() {
 `
 	// Build the grammar. 'document' is the starting production
 	const grammar = buildGrammar(XmlGrammar, 'document', {
-		unwrappedNonterminalNames: xmlGrammarUnwrappedNonterminalNames
+		unfoldedNonterminalNames: xmlGrammarUnfoldedNonterminalNames
 	})
 
 	// Parse the XML string
@@ -87,7 +87,7 @@ async function testRegExpParser() {
 	//const regExpString = '(abcd)(aa))'
 
 	const grammar = buildGrammar(RegExpGrammar, 'root', {
-		unwrappedNonterminalNames: regExpGrammarUnwrappedNonterminalNames
+		unfoldedNonterminalNames: regExpGrammarUnfoldedNonterminalNames
 	})
 
 	const parseTree = grammar.parse(regExpString)

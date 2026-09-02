@@ -144,9 +144,9 @@ const quotedString = R.anyOf(
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// Wrapped nonterminal names
+// Unfolded nonterminal list
 //////////////////////////////////////////////////////////////////////////////////////////////
-export const xmlGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
+export const xmlGrammarUnfoldedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
 	'openingTagStart',
 	'tagEnd',
 	'declarationTagOpening',

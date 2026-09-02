@@ -1,17 +1,17 @@
 import { Pattern } from 'regexp-composer'
 import { isArray, isBoolean, isString } from '../utilities/Utilities.js'
-import { GrammarElement } from './Grammar.js'
+import { GrammarNode } from './Grammar.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Internal static analysis methods
 /////////////////////////////////////////////////////////////////////////////////////////////////
-export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
-	const visitedNodes = new Set<GrammarElement>()
+export function detectAndAnnotateOptionalNodes(rootNode: GrammarNode) {
+	const visitedNodes = new Set<GrammarNode>()
 
-	const resolvedNodes = new Map<GrammarElement, boolean>()
-	const unresolvedNodes = new Map<GrammarElement, { dependencies: Set<GrammarElement>, isChoice: boolean }>()
+	const resolvedNodes = new Map<GrammarNode, boolean>()
+	const unresolvedNodes = new Map<GrammarNode, { dependencies: Set<GrammarNode>, isChoice: boolean }>()
 
-	function processDepthFirst(node: GrammarElement): boolean | undefined {
+	function processDepthFirst(node: GrammarNode): boolean | undefined {
 		if (visitedNodes.has(node)) {
 			return resolvedNodes.get(node)
 		}
@@ -46,19 +46,19 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 			}
 
 			case 'Sequence': {
-				const dependencies = new Set<GrammarElement>()
+				const dependencies = new Set<GrammarNode>()
 
 				let hasNonOptionalResolvedMember = false
 
-				for (const element of node.members) {
-					const result = processDepthFirst(element)
+				for (const member of node.members) {
+					const result = processDepthFirst(member)
 
 					if (isBoolean(result)) {
 						if (result === false) {
 							hasNonOptionalResolvedMember = true
 						}
 					} else {
-						dependencies.add(element)
+						dependencies.add(member)
 					}
 				}
 
@@ -82,18 +82,18 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 			}
 
 			case 'Choice': {
-				const dependencies = new Set<GrammarElement>()
+				const dependencies = new Set<GrammarNode>()
 				let hasOptionalResolvedMember = false
 
-				for (const element of node.members) {
-					const result = processDepthFirst(element)
+				for (const member of node.members) {
+					const result = processDepthFirst(member)
 
 					if (isBoolean(result)) {
 						if (result === true) {
 							hasOptionalResolvedMember = true
 						}
 					} else {
-						dependencies.add(element)
+						dependencies.add(member)
 					}
 				}
 
@@ -132,7 +132,7 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 		// and we should exit the loop.
 		let atLastOneDependencyResolvedInAnyNode = false
 
-		const nodesToDelete: GrammarElement[] = []
+		const nodesToDelete: GrammarNode[] = []
 
 		// Scan the unresolved nodes to locate any new resolved dependencies
 		for (const [node, { dependencies, isChoice }] of unresolvedNodes) {
@@ -151,12 +151,14 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 						if (value === true) {
 							resolvedNodes.set(node, true)
 							nodeResolved = true
+
 							break
 						}
 					} else {
 						if (value === false) {
 							resolvedNodes.set(node, false)
 							nodeResolved = true
+
 							break
 						}
 					}
@@ -204,10 +206,10 @@ export function detectAndAnnotateOptionalNodes(rootNode: GrammarElement) {
 	}
 }
 
-export function detectAndErrorOnLeftRecursion(rootNode: GrammarElement) {
-	const currentlyIteratedNodes = new Set<GrammarElement>()
+export function detectAndErrorOnLeftRecursion(rootNode: GrammarNode) {
+	const currentlyIteratedNodes = new Set<GrammarNode>()
 
-	function detect(node: GrammarElement) {
+	function detect(node: GrammarNode) {
 		if (currentlyIteratedNodes.has(node)) {
 			if (node.type === 'Nonterminal') {
 				throw new Error(`Detected left recursion for nonterminal '${node.name}'.`)

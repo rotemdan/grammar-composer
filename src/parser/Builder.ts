@@ -1,7 +1,7 @@
 import { isArray, isFunction, isString } from '../utilities/Utilities.js'
 
 import { detectAndAnnotateOptionalNodes, detectAndErrorOnLeftRecursion } from './StaticAnalysis.js'
-import { Grammar, Nonterminal, GrammarElement, StringTerminal, Sequence, NonterminalReference, Production } from './Grammar.js'
+import { Grammar, Nonterminal, GrammarNode, StringTerminal, Sequence, NonterminalReference, GrammarExpression } from './Grammar.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Grammar builder method
@@ -12,7 +12,7 @@ export function buildGrammar<T extends GrammarDefinition>(
 	options?: GrammarBuilderOptions<T>): Grammar<T> {
 
 	options = {
-		unwrappedNonterminalNames: [],
+		unfoldedNonterminalNames: [],
 		...options
 	}
 
@@ -34,10 +34,10 @@ export function buildGrammar<T extends GrammarDefinition>(
 		}
 
 		const productionContent = objectProperty.call(definitionObject)
-		const normalizedProduction = productionToGrammarElement(productionContent)
-		const isUnwrappedNonterminal = options.unwrappedNonterminalNames?.includes(key) === true
+		const productionContentNode = grammarExpressionToNode(productionContent)
+		const isUnfoldedNonterminal = options.unfoldedNonterminalNames?.includes(key) === true
 
-		const newNonterminal = nonterminal(key, normalizedProduction, isUnwrappedNonterminal)
+		const newNonterminal = nonterminal(key, productionContentNode, isUnfoldedNonterminal)
 		const newOptionalNonterminal = {
 			...newNonterminal,
 			optional: true,
@@ -57,7 +57,7 @@ export function buildGrammar<T extends GrammarDefinition>(
 	}
 
 	for (const [func, nonterminal] of nonterminalLookup) {
-		const preparedContent = prepareGrammarElement(
+		const preparedContent = prepareGrammarNode(
 			nonterminal.content,
 			nonterminalLookup,
 			optionalNonterminalLookup,
@@ -97,73 +97,73 @@ export function buildGrammar<T extends GrammarDefinition>(
 	)
 }
 
-function prepareGrammarElement(
-	rootElement: GrammarElement,
+function prepareGrammarNode(
+	rootNode: GrammarNode,
 	nonterminalLookup: Map<Function, Nonterminal>,
 	optionalNonterminalLookup: Map<Function, Nonterminal>,
 	getNewCacheId: () => number
-): GrammarElement {
-	function prepare(element: GrammarElement): GrammarElement {
-		const setCacheIdIfNeeded = (element: GrammarElement) => {
-			if (element.cached === true) {
-				element.cacheId = getNewCacheId()
+): GrammarNode {
+	function prepare(node: GrammarNode): GrammarNode {
+		const setCacheIdIfNeeded = (node: GrammarNode) => {
+			if (node.cached === true) {
+				node.cacheId = getNewCacheId()
 			}
 
-			return element
+			return node
 		}
 
-		switch (element.type) {
+		switch (node.type) {
 			case 'StringTerminal':
 			case 'Nonterminal': {
 				return setCacheIdIfNeeded({
-					...element
+					...node
 				})
 			}
 
 			case 'PatternTerminal': {
 				return setCacheIdIfNeeded({
-					...element,
+					...node,
 				})
 			}
 
 			case 'Repetition': {
 				return setCacheIdIfNeeded({
-					...element,
-					content: prepare(element.content),
+					...node,
+					content: prepare(node.content),
 				})
 			}
 
 			case 'Sequence':
 			case 'Choice': {
 				return setCacheIdIfNeeded({
-					...element,
-					members: element.members.map(element => prepare(element)),
+					...node,
+					members: node.members.map(member => prepare(member)),
 				})
 			}
 
 			case 'NonterminalReference': {
-				const reference = element.reference
+				const reference = node.reference
 
 				let nonterminal: Nonterminal | undefined
 
-				if (element.optional) {
+				if (node.optional) {
 					nonterminal = optionalNonterminalLookup.get(reference)
 				} else {
 					nonterminal = nonterminalLookup.get(reference)
 				}
 
 				if (!nonterminal) {
-					throw new Error(`Couldn't resolve function reference in grammar element: ${JSON.stringify(element)}`)
+					throw new Error(`Couldn't resolve function reference in grammar node: ${JSON.stringify(node)}`)
 				}
 
-				if (element.cached === true) {
+				if (node.cached === true) {
 					return {
 						...nonterminal,
 
 						cached: true,
 						cacheId: getNewCacheId(),
 
-						grammarNonterminal: nonterminal.grammarNonterminal ?? nonterminal
+						canonicalNonterminal: nonterminal.canonicalNonterminal ?? nonterminal
 					}
 				} else {
 					return nonterminal
@@ -172,7 +172,7 @@ function prepareGrammarElement(
 		}
 	}
 
-	return prepare(rootElement)
+	return prepare(rootNode)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,7 +192,7 @@ function stringTerminal(content: string): StringTerminal {
 	}
 }
 
-function nonterminal(name: string, content: GrammarElement, unwrapped: boolean): Nonterminal {
+function nonterminal(name: string, content: GrammarNode, unfolded: boolean): Nonterminal {
 	if (name.length < 1) {
 		throw new Error(`A nonterminal name must include at least 1 character.`)
 	}
@@ -204,11 +204,11 @@ function nonterminal(name: string, content: GrammarElement, unwrapped: boolean):
 
 		optional: false,
 		cached: false,
-		unwrapped,
+		unfolded,
 	}
 }
 
-function sequence(members: GrammarElement[]): Sequence {
+function sequence(members: GrammarNode[]): Sequence {
 	return {
 		type: 'Sequence',
 		members,
@@ -218,27 +218,27 @@ function sequence(members: GrammarElement[]): Sequence {
 	}
 }
 
-function unresolvedReference(reference: Function): NonterminalReference {
+function unresolvedNonterminalReference(nonterminalReferenceFunction: Function): NonterminalReference {
 	return {
 		type: 'NonterminalReference',
-		reference,
+		reference: nonterminalReferenceFunction,
 		optional: false,
 
 		cached: false,
 	}
 }
 
-export function productionToGrammarElement(production: Production): GrammarElement {
-	if (isString(production)) {
-		return stringTerminal(production)
-	} else if (isArray(production)) {
-		const normalizedMembers = production.map(element => productionToGrammarElement(element))
+export function grammarExpressionToNode(grammarExpression: GrammarExpression): GrammarNode {
+	if (isString(grammarExpression)) {
+		return stringTerminal(grammarExpression)
+	} else if (isArray(grammarExpression)) {
+		const memberNodes = grammarExpression.map(member => grammarExpressionToNode(member))
 
-		return sequence(normalizedMembers)
-	} else if (isFunction(production)) {
-		return unresolvedReference(production)
+		return sequence(memberNodes)
+	} else if (isFunction(grammarExpression)) {
+		return unresolvedNonterminalReference(grammarExpression)
 	} else {
-		return production
+		return grammarExpression
 	}
 }
 
@@ -246,7 +246,7 @@ export function productionToGrammarElement(production: Production): GrammarEleme
 // Builder type definitions
 /////////////////////////////////////////////////////////////////////////////////////////////////
 export interface GrammarBuilderOptions<T> {
-	unwrappedNonterminalNames?: GrammarNonterminalNames<T>
+	unfoldedNonterminalNames?: GrammarNonterminalNames<T>
 }
 
 export type GrammarNonterminalNames<T> = (keyof T)[]

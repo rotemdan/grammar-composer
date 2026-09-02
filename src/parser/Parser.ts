@@ -1,5 +1,5 @@
 import { isNumber } from '../utilities/Utilities.js'
-import { Grammar, GrammarElement, Terminal, type Nonterminal } from './Grammar.js'
+import { Grammar, GrammarNode, Terminal, type Nonterminal } from './Grammar.js'
 import { type FailedMatch, ParseError } from './ParseError.js'
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,22 +34,22 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 		}
 	}
 
-	function tryParse(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		if (isNumber(grammarElement.cacheId)) {
-			return tryParseCached(grammarElement, startOffset)
+	function tryParse(grammarNode: GrammarNode, startOffset: number): ParseResult | null {
+		if (isNumber(grammarNode.cacheId)) {
+			return tryParseCached(grammarNode, startOffset)
 		} else {
-			return tryParseUncached(grammarElement, startOffset)
+			return tryParseUncached(grammarNode, startOffset)
 		}
 	}
 
-	function tryParseCached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		const cacheId = grammarElement.cacheId!
+	function tryParseCached(grammarNode: GrammarNode, startOffset: number): ParseResult | null {
+		const cacheId = grammarNode.cacheId!
 		const cacheKey = (startOffset * cacheKeyOffsetMultiplier) + cacheId
 
 		if (parseResultsCache.has(cacheKey)) {
 			return parseResultsCache.get(cacheKey)!
 		} else {
-			const parseResult = tryParseUncached(grammarElement, startOffset)
+			const parseResult = tryParseUncached(grammarNode, startOffset)
 
 			parseResultsCache.set(cacheKey, parseResult)
 
@@ -57,14 +57,14 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 		}
 	}
 
-	function tryParseUncached(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		const result = tryParseElement(grammarElement, startOffset)
+	function tryParseUncached(grammarNode: GrammarNode, startOffset: number): ParseResult | null {
+		const result = tryParseNode(grammarNode, startOffset)
 
-		if (result === null && grammarElement.optional === true) {
-			// An optional element that doesn't match is "skipped": it succeeds
+		if (result === null && grammarNode.optional === true) {
+			// An optional node that doesn't match is "skipped": it succeeds
 			// by consuming no input and producing no nodes. This uniformly
 			// implements the `possibly()` "or skip" semantics wherever the
-			// element appears (sequence members, repetition content, choice
+			// node appears (sequence members, repetition content, choice
 			// members, or as the content of a production itself).
 			return { endOffset: startOffset, nodes: undefined, skipped: true }
 		}
@@ -72,14 +72,14 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 		return result
 	}
 
-	function tryParseElement(grammarElement: GrammarElement, startOffset: number): ParseResult | null {
-		switch (grammarElement.type) {
+	function tryParseNode(grammarNode: GrammarNode, startOffset: number): ParseResult | null {
+		switch (grammarNode.type) {
 			case 'StringTerminal': {
-				const target = grammarElement.content
+				const target = grammarNode.content
 				const endOffset = startOffset + target.length
 
 				if (endOffset > inputLength) {
-					updateBestFailedMatchesIfNeeded(grammarElement, startOffset)
+					updateBestFailedMatchesIfNeeded(grammarNode, startOffset)
 
 					return null
 				}
@@ -92,7 +92,7 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 						nodes: undefined
 					}
 				} else {
-					updateBestFailedMatchesIfNeeded(grammarElement, startOffset)
+					updateBestFailedMatchesIfNeeded(grammarNode, startOffset)
 
 					return null
 				}
@@ -101,10 +101,10 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 			case 'PatternTerminal': {
 				const substringToMatch = inputString.substring(startOffset)
 
-				const matchResults = grammarElement.regExp.exec(substringToMatch)
+				const matchResults = grammarNode.regExp.exec(substringToMatch)
 
 				if (matchResults === null) {
-					updateBestFailedMatchesIfNeeded(grammarElement, startOffset)
+					updateBestFailedMatchesIfNeeded(grammarNode, startOffset)
 
 					return null
 				}
@@ -177,9 +177,9 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 			}
 
 			case 'Nonterminal': {
-				nonterminalStack.push(grammarElement)
+				nonterminalStack.push(grammarNode)
 
-				const result = tryParse(grammarElement.content, startOffset)
+				const result = tryParse(grammarNode.content, startOffset)
 
 				nonterminalStack.pop()
 
@@ -194,9 +194,9 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 					return { endOffset: startOffset, nodes: undefined, skipped: true }
 				}
 
-				const grammarElementName = grammarElement.name
+				const grammarNodeName = grammarNode.name
 
-				if (grammarElement.unwrapped) {
+				if (grammarNode.unfolded) {
 					const newResult: ParseResult = {
 						endOffset: result.endOffset,
 						nodes: result.nodes
@@ -205,7 +205,7 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 					return newResult
 				} else {
 					const newNode: ParseTreeNode = {
-						name: grammarElementName,
+						name: grammarNodeName,
 
 						startOffset,
 						endOffset: result.endOffset,
@@ -228,14 +228,14 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 				let successfulResults: ParseResult[] = []
 				let readOffset = startOffset
 
-				for (const element of grammarElement.members) {
-					const elementResult = tryParse(element, readOffset)
+				for (const node of grammarNode.members) {
+					const parseResult = tryParse(node, readOffset)
 
-					if (elementResult !== null) {
-						successfulResults.push(elementResult)
+					if (parseResult !== null) {
+						successfulResults.push(parseResult)
 
-						readOffset = elementResult.endOffset
-					} else if (element.optional === false) {
+						readOffset = parseResult.endOffset
+					} else if (node.optional === false) {
 						return null
 					}
 				}
@@ -260,7 +260,7 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 				const nodes: ParseTreeNode[] = []
 
 				while (true) {
-					const result = tryParse(grammarElement.content, readOffset)
+					const result = tryParse(grammarNode.content, readOffset)
 
 					if (result === null) {
 						break
@@ -282,7 +282,7 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 						endOffset: readOffset,
 						nodes: nodes.length > 0 ? nodes : undefined
 					}
-				} else if (grammarElement.optional === true) {
+				} else if (grammarNode.optional === true) {
 					return {
 						endOffset: startOffset,
 						nodes: undefined
@@ -295,13 +295,13 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 			case 'Choice': {
 				let bestResult: ParseResult | null = null
 
-				for (const member of grammarElement.members) {
+				for (const member of grammarNode.members) {
 					const result = tryParse(member, startOffset)
 
 					if (result !== null && (bestResult === null || result.endOffset > bestResult.endOffset)) {
 						bestResult = result
 
-						if (grammarElement.exhaustive === false) {
+						if (grammarNode.exhaustive === false) {
 							break
 						}
 					}
@@ -311,12 +311,12 @@ export function parse(inputString: string, grammar: Grammar<any>, options?: Pars
 			}
 
 			default: {
-				throw new Error(`Unsupported grammar element type '${(grammarElement as any).type}'.`)
+				throw new Error(`Unrecognized grammar node type '${(grammarNode as any).type}'.`)
 			}
 		}
 	}
 
-	const result = tryParse(grammar.rootElement, 0)
+	const result = tryParse(grammar.rootNode, 0)
 
 	if (result && result.endOffset >= inputLength) {
 		return result.nodes ?? []
@@ -341,7 +341,7 @@ export interface ParseResult {
 	endOffset: number
 	nodes: ParseTreeNode[] | undefined
 
-	// Marks a result produced by an optional element that was "skipped" (it
+	// Marks a result produced by an optional node that was "skipped" (it
 	// didn't match, so the parse succeeded by consuming no input and producing
 	// no nodes). Set internally by the parser; a receiving `Nonterminal` uses
 	// it to avoid creating a node for skipped content.
