@@ -1,4 +1,4 @@
-import { Pattern, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
+import { PatternExpression, buildRegExp, inputStart, isPatternOptional } from 'regexp-composer'
 import { isArray } from '../utilities/Utilities.js'
 
 import { parse } from './Parser.js'
@@ -91,21 +91,21 @@ export function possibly<T extends GrammarExpression>(content: GrammarExpression
 	return { ...grammarExpressionToNode(content), optional: true } as T
 }
 
-export function pattern(pattern: Pattern): PatternTerminal {
-	if (isArray(pattern)) {
-		pattern = [inputStart, ...pattern]
+export function pattern(patternExpression: PatternExpression): PatternTerminal {
+	if (isArray(patternExpression)) {
+		patternExpression = [inputStart, ...patternExpression]
 	} else {
-		pattern = [inputStart, pattern]
+		patternExpression = [inputStart, patternExpression]
 	}
 
-	validatePatternCaptureGroups(pattern)
+	validatePatternCaptureGroups(patternExpression)
 
-	const regExp = buildRegExp(pattern)
-	const optional = isPatternOptional(pattern)
+	const regExp = buildRegExp(patternExpression)
+	const optional = isPatternOptional(patternExpression)
 
 	return {
 		type: 'PatternTerminal',
-		pattern,
+		pattern: patternExpression,
 		regExp,
 		optional,
 
@@ -156,7 +156,7 @@ export interface StringTerminal extends GrammarNodeBase {
 
 export interface PatternTerminal extends GrammarNodeBase {
 	type: 'PatternTerminal'
-	pattern: Pattern
+	pattern: PatternExpression
 	regExp: RegExp
 }
 

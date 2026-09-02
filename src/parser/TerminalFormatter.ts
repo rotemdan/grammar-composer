@@ -1,4 +1,4 @@
-import type { Pattern, SpecialToken } from 'regexp-composer'
+import type { PatternExpression, SpecialToken } from 'regexp-composer'
 import type { PatternTerminal, StringTerminal, Terminal } from './Grammar.js'
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +41,7 @@ export class TerminalFormatter {
 		return truncatedStringifiedPattern
 	}
 
-	stringifyPattern(pattern: Pattern): string {
+	stringifyPattern(pattern: PatternExpression): string {
 		if (typeof pattern === 'string') {
 			return this.stringifyPatternStringLiteral(pattern)
 		}

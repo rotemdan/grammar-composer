@@ -1,4 +1,4 @@
-import { Pattern } from 'regexp-composer'
+import { PatternExpression } from 'regexp-composer'
 import { isArray, isBoolean, isString } from '../utilities/Utilities.js'
 import { GrammarNode } from './Grammar.js'
 
@@ -268,12 +268,12 @@ export function detectAndErrorOnLeftRecursion(rootNode: GrammarNode) {
 // during parsing.
 //
 // Mirrors the AST traversal performed by regexp-composer's own 'isPatternOptional'.
-export function validatePatternCaptureGroups(pattern: Pattern): void {
+export function validatePatternCaptureGroups(patternExpression: PatternExpression): void {
 	const seenNamedCaptureGroupNames = new Set<string>()
 	let hasNamedCaptureGroup = false
 	let hasUnnamedCaptureGroup = false
 
-	function walk(node: Pattern): void {
+	function walk(node: PatternExpression): void {
 		if (isString(node)) {
 			return
 		}
@@ -344,7 +344,7 @@ export function validatePatternCaptureGroups(pattern: Pattern): void {
 		}
 	}
 
-	walk(pattern)
+	walk(patternExpression)
 
 	if (hasNamedCaptureGroup && hasUnnamedCaptureGroup) {
 		throw new Error(`The regular expression pattern contains a combination of named and unnamed capture groups. Due to limitations of the JavaScript RegExp engine, it is impossible to reliably identify the ordering of this combination, please use either all unnamed or all named capture groups, but not both.`)

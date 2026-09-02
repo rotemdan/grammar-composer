@@ -102,7 +102,7 @@ export class JsonGrammar {
 	colons = () => createPatternWithClearedWhitespace(':')
 }
 
-function createPatternWithClearedWhitespace(subpattern: R.Pattern) {
+function createPatternWithClearedWhitespace(subpattern: R.PatternExpression) {
 	return G.pattern([
 		zeroOrMoreWhitespace,
 
