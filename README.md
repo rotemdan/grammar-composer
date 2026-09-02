@@ -5,7 +5,7 @@ A library to define, build and efficiently parse context-free grammars.
 * Grammars are defined using TypeScript class declarations
 * No tokenization stage. The generated parser accepts raw characters as input, meaning it's a form of lexer-free, hybrid parser, supporting contextual low-level parsing. This means low-level character patterns, recognized by a regular language, can be specialized to various high-level parser contexts, and sub-patterns captured in low-level regular expressions are directly embedded as part of the resulting parse tree
 * Raw character parsing is defined as part of the grammar via embedded `Pattern` objects that are internally processed through the [`regexp-composer`](https://github.com/rotemdan/regexp-composer) regular expression library. This means that any subset of the grammar that can be stated as a regular grammar can be moved to be parsed using the highly optimized native JavaScript RegExp engine, instead of being parsed via the slower context-free parser
-* Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions or more specific grammar elements
+* Top-down parsing (roughly equivalent to PEG parsing), with optional "packrat" caching that can be enabled or disabled for individual productions or more specific grammar expressions
 * Supports right-recursion, but will currently error when left-recursion is detected
 * Uses sophisticated static analysis to automatically identify and annotate optional productions
 * Provides useful parse-time error reporting, identifying the exact production involved and most likely alternatives at the failed position
@@ -179,9 +179,17 @@ const quotedString = R.anyOf(
 )
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-// Wrapped nonterminal names
+// Unfolded nonterminal list
+//
+// Nonterminals placed here will be "transparent" in the resulting parse tree.
+//
+// Their content would be absorbed by their parent.
+//
+// This is useful for the purpose of simplifying the resulting parse tree, and
+// removing non-semantic "technical" nodes used for things like grammar optimization
+// and refactoring.
 //////////////////////////////////////////////////////////////////////////////////////////////
-export const xmlGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
+export const xmlGrammarUnfoldedNonterminalNames: G.GrammarNonterminalNames<XmlGrammar> = [
 	'openingTagStart',
 	'tagEnd',
 	'declarationTagOpening',
@@ -192,7 +200,7 @@ export const xmlGrammarUnwrappedNonterminalNames: G.GrammarNonterminalNames<XmlG
 
 ```ts
 import { buildGrammar } from 'grammar-composer'
-import { XmlGrammar, xmlGrammarUnwrappedNonterminalNames } from './XmlGrammar.js'
+import { XmlGrammar, xmlGrammarUnfoldedNonterminalNames } from './XmlGrammar.js'
 
 	const xmlString = `
 <!DOCTYPE web-app>
@@ -213,7 +221,7 @@ const grammar = buildGrammar(RegExpGrammar, 'root', {
     // "passed through" when the parse tree is built,
     // meaning they would not appear in the parse tree
     // and their child nodes would be absorbed into their ancestor nodes.
-    unwrappedNonterminalNames: xmlGrammarUnwrappedNonterminalNames
+    unfoldedNonterminalNames: xmlGrammarUnfoldedNonterminalNames
 })
 
 // Parse the XML string with the built grammar
@@ -417,37 +425,37 @@ The resulting parse tree looks like:
 
 Context-free operators are mostly named similarly to the ones in [`regexp-composer`](https://github.com/rotemdan/regexp-composer).
 
-### `zeroOrMore(grammarElement)`
+### `zeroOrMore(grammarExpression)`
 
-Match the grammar element zero or more times.
+Match the grammar expression zero or more times.
 
-### `oneOrMore(grammarElement)`
+### `oneOrMore(grammarExpression)`
 
-Match the grammar element one or more times.
+Match the grammar expression one or more times.
 
-### `anyOf(grammarElement1, grammarElement2, grammarElement3, ...)`
+### `anyOf(grammarExpression1, grammarExpression2, grammarExpression3, ...)`
 
-Match any of the grammar elements. The first successful match, in order, would be accepted without trying subsequent ones.
+Match any of the grammar expressions. The first successful match, in order, would be accepted without trying subsequent ones.
 
-### `bestOf(grammarElement1, grammarElement2, grammarElement3, ...)`
+### `bestOf(grammarExpression1, grammarExpression2, grammarExpression3, ...)`
 
-Match the best grammar element. All possibilities would be tried, and the the longest match (in terms of character count) would be chosen.
+Match the best grammar expression. All possibilities would be tried, and the the longest match (in terms of character count) would be chosen.
 
-### `possibly(grammarElement)`
+### `possibly(grammarExpression)`
 
-Optionally accept the grammar element, or skip if it doesn't match.
+Optionally accept the grammar expression, or skip if it doesn't match.
 
 ### `pattern(regexpPattern)`
 
 Accept a regular expression pattern compatible with `regexp-composer` `Pattern` type (either a simple string, pattern object, or array of pattern objects).
 
-### `cached(grammarElement)`
+### `cached(grammarExpression)`
 
-Store the result of parsing using this grammar element and reuse when it's subsequently evaluated **at the same text position**.
+Store the parsed result of this grammar expression and reuse it when it's subsequently evaluated **at the same text position**.
 
-### `uncached(grammarElement)`
+### `uncached(grammarExpression)`
 
-Don't cache this grammar element.
+Don't cache this grammar expression.
 
 ## License
 
