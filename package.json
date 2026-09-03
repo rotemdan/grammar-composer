@@ -1,6 +1,6 @@
 {
 	"name": "grammar-composer",
-	"version": "0.7.1",
+	"version": "0.7.2",
 	"description": "Creates and generates parsers from composable grammar definitions. Includes advanced features like lexer-free parsing, selective packrat memoization and static analysis.",
 	"author": "Rotem Dan",
 	"license": "MIT",

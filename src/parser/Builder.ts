@@ -24,7 +24,7 @@ export function buildGrammar<T extends GrammarDefinition>(
 	const nonterminalLookup = new Map<Function, Nonterminal>()
 	const optionalNonterminalLookup = new Map<Function, Nonterminal>()
 
-	for (const key of Object.keys(definitionObject)) {
+	for (const key of getProductionNames(definitionObject)) {
 		const objectProperty = definitionObject[key]
 
 		nameLookup.set(objectProperty, key)
@@ -95,6 +95,31 @@ export function buildGrammar<T extends GrammarDefinition>(
 		startProductionName,
 		cacheIdCounter
 	)
+}
+
+function getProductionNames(definitionObject: GrammarDefinition): string[] {
+	const keys: string[] = []
+	const seen = new Set<any>()
+
+	// Walk the prototype chain (stopping before Object.prototype) so that
+	// productions declared as prototype methods -- including inherited ones --
+	// are picked up in addition to instance fields.
+	let current: object | null = definitionObject
+
+	while (current !== null && current !== Object.prototype) {
+		for (const key of Object.getOwnPropertyNames(current)) {
+			if (key === 'constructor' || seen.has(key)) {
+				continue
+			}
+
+			seen.add(key)
+			keys.push(key)
+		}
+
+		current = Object.getPrototypeOf(current)
+	}
+
+	return keys
 }
 
 function prepareGrammarNode(
