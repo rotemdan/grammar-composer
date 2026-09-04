@@ -259,7 +259,7 @@ function buildErrorMessage(details: ParseErrorDetails, line: number, column: num
 		? `While parsing '${details.contextProductionName}', expected one of the following:\n\n${expectedMessage}`
 		: `Expected one of the following:\n\n${expectedMessage}`
 
-	return `Failed parsing the input text ${context}\n\n${contextMessage}`
+	return `Failed parsing the input text ${context}\n\n${contextMessage}\n`
 }
 
 // Formats the expected terminals grouped by production, with a blank line between
